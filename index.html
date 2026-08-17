@@ -1267,6 +1267,9 @@ function renderAchievementsScreen(){
 // Cada atualização real do site vira uma entrada aqui. A versão mais nova
 // (topo do array) é a que decide se o painel abre sozinho pra quem já visitou.
 const CHANGELOG=[
+  {version:'1.40',title:'Apelido no Top 30',items:[
+    'Novo: escolha um apelido pra aparecer no ranking, em vez de usar sempre o nome da sua conta Google.',
+  ]},
   {version:'1.39',title:'Top 30 — ranking global',items:[
     'Novo: login com Google e um ranking global de verdade — Top 30 do Modo Carreira, por nota da carreira, títulos e gols do artilheiro somados.',
     'No fim de uma carreira, envie ela pro ranking com um clique — só entra a sua melhor carreira, nunca a última se for pior.',
@@ -9421,6 +9424,20 @@ let leaderboardRows=null;
 let leaderboardLoading=false;
 let leaderboardError=null;
 let leaderboardSubmitStatus=null; // null | 'sending' | 'sent' | 'error'
+let leaderboardNickname=(function(){ try{ return localStorage.getItem('carreiraDraftNickname')||''; }catch(e){ return ''; } })();
+
+// leaderboardRows vem do Firestore — dado de OUTRAS pessoas, incluindo o
+// apelido que cada uma escolheu digitar livremente. Sem escapar isso, um
+// apelido malicioso (ex.: contendo `<img onerror=...>`) executaria no
+// navegador de QUALQUER pessoa que abrisse a aba Top 30 — XSS armazenado
+// de verdade, não hipotético (chance/gradeIndex/goals viraram number
+// validados pelas regras do Firestore, mas username/clubName/grade
+// continuam string livre do lado de quem escreveu, mesmo com as regras).
+function escapeHtml(str){
+  return String(str==null?'':str).replace(/[&<>"']/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
 
 function onFbAuthChanged(){
   leaderboardRows=null; // login mudou — recarrega (pra destacar "minha linha" certo)
@@ -9438,6 +9455,14 @@ function gradeToIndex(grade){
 function computeLeaderboardScore(gradeIndex,titles,goals){
   return gradeIndex*100+titles*15+goals;
 }
+// Campo de texto — igual ao nome do jogador na Carreira de Jogador, NÃO
+// re-renderiza a cada tecla (senão derruba o foco do campo a cada letra,
+// mesmo bug já corrigido lá). Persiste em localStorage pra sobreviver a
+// reload/nova sessão nesse mesmo navegador.
+function setLeaderboardNickname(value){
+  leaderboardNickname=value;
+  try{localStorage.setItem('carreiraDraftNickname',value);}catch(e){}
+}
 function buildCareerLeaderboardPayload(){
   const grade=computeCareerGrade();
   const gradeIndex=gradeToIndex(grade);
@@ -9446,7 +9471,10 @@ function buildCareerLeaderboardPayload(){
   const realTitles=career.trophies.filter(t=>(t.type==='league'||t.type==='continental'||t.type==='domestic_cup')&&!t.tainted).length;
   const totalGoals=career.history.reduce((s,h)=>s+(h.scorer?h.scorer.goals:0),0);
   const score=computeLeaderboardScore(gradeIndex,realTitles,totalGoals);
-  return{clubName:career.club.n,grade,gradeIndex,titles:realTitles,goals:totalGoals,score};
+  // Apelido customizado tem prioridade — cai pro nome da conta Google só
+  // se o jogador nunca escolheu um apelido próprio.
+  const username=(leaderboardNickname&&leaderboardNickname.trim())||(window.fbUser&&window.fbUser.name)||'Jogador sem nome';
+  return{username,clubName:career.club.n,grade,gradeIndex,titles:realTitles,goals:totalGoals,score};
 }
 function submitCareerToLeaderboard(){
   if(typeof window.fbSignIn!=='function'){leaderboardSubmitStatus='error';renderCareer();return;}
@@ -9470,9 +9498,13 @@ function renderLeaderboardScreen(){
   const userBlock=!fbReady
     ?'<div class="squad-hint" style="margin-bottom:16px">Não consegui carregar o serviço do Top 30 agora. Tente recarregar a página.</div>'
     :window.fbUser
-    ?`<div class="squad-hint" style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-        <span>Logado como <strong>${window.fbUser.name||'Jogador'}</strong></span>
-        <button class="btn-secondary" onclick="fbSignOut()">Sair</button>
+    ?`<div class="squad-hint" style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+          <span>Logado como <strong>${escapeHtml(window.fbUser.name||'Jogador')}</strong></span>
+          <button class="btn-secondary" onclick="fbSignOut()">Sair</button>
+        </div>
+        <div class="field-label">Apelido no ranking</div>
+        <input class="cf-search" type="text" placeholder="Como você quer aparecer no Top 30" value="${escapeHtml(leaderboardNickname)}" oninput="setLeaderboardNickname(this.value)">
       </div>`
     :`<div style="margin-bottom:16px">
         <button class="btn-primary" onclick="fbSignIn()">Entrar com Google</button>
@@ -9507,7 +9539,7 @@ function renderLeaderboardScreen(){
       const mine=window.fbUser&&r.uid===window.fbUser.uid;
       return`<div class="history-item" style="${mine?'border-color:var(--accent);border-width:2px':''}">
         <span class="hi-season">#${i+1}</span>
-        <span class="hi-record">${r.username} · ${r.clubName} · ${r.grade} · ${r.titles} título(s) · ${r.goals} gols</span>
+        <span class="hi-record">${escapeHtml(r.username)} · ${escapeHtml(r.clubName)} · ${escapeHtml(r.grade)} · ${Number(r.titles)||0} título(s) · ${Number(r.goals)||0} gols</span>
       </div>`;
     }).join('');
   }
@@ -9591,7 +9623,7 @@ window.fbSubmitCareer = async function(payload){
     }
     await setDoc(ref, {
       uid,
-      username: fbAuth.currentUser.displayName || 'Jogador sem nome',
+      username: payload.username || fbAuth.currentUser.displayName || 'Jogador sem nome',
       clubName: payload.clubName,
       grade: payload.grade,
       gradeIndex: payload.gradeIndex,
