@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://lohzin.github.io/carreiradraft/sitemap.xml
