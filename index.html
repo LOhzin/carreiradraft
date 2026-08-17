@@ -736,6 +736,7 @@ footer{border-top:1px solid var(--border);padding:28px 0}
       <button class="tab-btn" data-tab="playercareer" onclick="switchTab('playercareer')">👟 Carreira de Jogador</button>
       <button class="tab-btn" data-tab="worldcup" onclick="switchTab('worldcup')">🌍 Copa do Mundo</button>
       <button class="tab-btn" data-tab="achievements" onclick="switchTab('achievements')">🏅 Conquistas</button>
+      <button class="tab-btn" data-tab="leaderboard" onclick="switchTab('leaderboard')">🌐 Top 30</button>
     </div>
 
     <!-- GENERATOR TAB -->
@@ -805,6 +806,11 @@ footer{border-top:1px solid var(--border);padding:28px 0}
     <!-- ACHIEVEMENTS TAB -->
     <div class="tab-pane" id="tab-achievements">
       <div id="achievements-root"></div>
+    </div>
+
+    <!-- LEADERBOARD TAB -->
+    <div class="tab-pane" id="tab-leaderboard">
+      <div class="career-wrap" id="leaderboard-root"></div>
     </div>
   </div>
 </section>
@@ -1261,6 +1267,11 @@ function renderAchievementsScreen(){
 // Cada atualização real do site vira uma entrada aqui. A versão mais nova
 // (topo do array) é a que decide se o painel abre sozinho pra quem já visitou.
 const CHANGELOG=[
+  {version:'1.39',title:'Top 30 — ranking global',items:[
+    'Novo: login com Google e um ranking global de verdade — Top 30 do Modo Carreira, por nota da carreira, títulos e gols do artilheiro somados.',
+    'No fim de uma carreira, envie ela pro ranking com um clique — só entra a sua melhor carreira, nunca a última se for pior.',
+    'Por enquanto o ranking é exclusivo do Modo Carreira (técnico) — Carreira de Jogador e Copa do Mundo ficam de fora dessa por ora.',
+  ]},
   {version:'1.38',title:'Ajustes na Carreira de Jogador',items:[
     'Corrigido: o campo de nome na criação do jogador perdia o foco a cada letra digitada.',
     'Ficar titular ficou mais realista — jogadores de base num clube grande não vão mais passar temporadas inteiras praticamente sem jogar.',
@@ -1513,6 +1524,7 @@ function switchTab(t){
   if(t==='playercareer')renderPlayerCareer();
   if(t==='worldcup')renderWC();
   if(t==='achievements')renderAchievementsScreen();
+  if(t==='leaderboard')renderLeaderboardScreen();
   musicSyncToScreen(); // Gerador/Jogadores/Comunidade não passam por renderCareer/renderWC — sincroniza aqui também
 }
 
@@ -8558,8 +8570,16 @@ function renderSummary(){
       <span class="hi-record">${career.scoutStats.hits}/${scoutTotal} fichas certas${scoutGrade?' · '+scoutGrade:''}</span>
     </div>`:'';
 
+  const leaderboardLabel=!window.fbUser?'🌐 Entrar com Google e enviar pro Top 30'
+    :leaderboardSubmitStatus==='sending'?'Enviando...'
+    :leaderboardSubmitStatus==='sent'?'✓ Enviado pro Top 30'
+    :leaderboardSubmitStatus==='error'?'Erro ao enviar — tentar de novo'
+    :'🌐 Enviar carreira pro Top 30';
+  const leaderboardDisabled=leaderboardSubmitStatus==='sending'||leaderboardSubmitStatus==='sent';
+
   return`<div>
     ${renderCareerShareCard()}
+    <button class="btn-secondary" style="margin-bottom:16px" ${leaderboardDisabled?'disabled':''} onclick="submitCareerToLeaderboard()">${leaderboardLabel}</button>
     <div class="summary-detail-toggle" id="summary-detail-toggle" onclick="toggleSummaryDetail()">Ver todos os detalhes (troféus, linha do tempo, decisões, temporada a temporada) ↓</div>
     <div id="summary-detail" style="display:none">
     ${resilienceNote}
@@ -9384,6 +9404,121 @@ function renderPlayerCareer(){
   root.innerHTML=html;
 }
 
+// ══════════════════════════════════════════════════════════════════
+// TOP 30 — RANKING GLOBAL (Modo Carreira técnico, único modo que
+// participa por enquanto, pedido explícito do Lohan). Login e leitura/
+// escrita no Firestore rodam num <script type="module"> separado no fim
+// do arquivo (o SDK do Firebase é ESM, não dá pra `import` dentro do
+// script clássico gigante que é o resto do jogo) — essa seção só
+// consome o que ele expõe em window (fbSignIn/fbSignOut/fbSubmitCareer/
+// fbLoadLeaderboard/fbUser) e reage a mudança de login via
+// onFbAuthChanged(), chamada por ele. Tudo aqui é defensivo (checa
+// typeof antes de chamar) — se o Firebase falhar ao carregar (rede,
+// bloqueador de anúncio, etc.), o resto do jogo continua funcionando
+// normal, só o Top 30 fica indisponível.
+// ══════════════════════════════════════════════════════════════════
+let leaderboardRows=null;
+let leaderboardLoading=false;
+let leaderboardError=null;
+let leaderboardSubmitStatus=null; // null | 'sending' | 'sent' | 'error'
+
+function onFbAuthChanged(){
+  leaderboardRows=null; // login mudou — recarrega (pra destacar "minha linha" certo)
+  renderLeaderboardScreen();
+}
+
+const GRADE_LADDER=['D','C','C+','B','B+','A','A+','S','S+','PATRIMÔNIO NACIONAL'];
+function gradeToIndex(grade){
+  const i=GRADE_LADDER.indexOf(grade);
+  return i<0?0:i;
+}
+// Nota pesa mais (é o resumo de toda a carreira, já embute títulos e
+// posição na tabela) — títulos e gols desempatam dentro da mesma faixa de
+// nota. Pedido explícito: "por mais gols, notas e títulos".
+function computeLeaderboardScore(gradeIndex,titles,goals){
+  return gradeIndex*100+titles*15+goals;
+}
+function buildCareerLeaderboardPayload(){
+  const grade=computeCareerGrade();
+  const gradeIndex=gradeToIndex(grade);
+  // Mesmo filtro de integridade já usado pra nota S/S+/PATRIMÔNIO NACIONAL —
+  // título contestado (suborno) não conta pro ranking também.
+  const realTitles=career.trophies.filter(t=>(t.type==='league'||t.type==='continental'||t.type==='domestic_cup')&&!t.tainted).length;
+  const totalGoals=career.history.reduce((s,h)=>s+(h.scorer?h.scorer.goals:0),0);
+  const score=computeLeaderboardScore(gradeIndex,realTitles,totalGoals);
+  return{clubName:career.club.n,grade,gradeIndex,titles:realTitles,goals:totalGoals,score};
+}
+function submitCareerToLeaderboard(){
+  if(typeof window.fbSignIn!=='function'){leaderboardSubmitStatus='error';renderCareer();return;}
+  if(!window.fbUser){window.fbSignIn();return;}
+  leaderboardSubmitStatus='sending';
+  renderCareer();
+  const payload=buildCareerLeaderboardPayload();
+  window.fbSubmitCareer(payload).then(function(res){
+    leaderboardSubmitStatus=res&&res.ok?'sent':'error';
+    renderCareer();
+  });
+}
+function retryLeaderboardLoad(){
+  leaderboardError=null;
+  renderLeaderboardScreen();
+}
+function renderLeaderboardScreen(){
+  const root=document.getElementById('leaderboard-root');
+  if(!root)return;
+  const fbReady=typeof window.fbSignIn==='function';
+  const userBlock=!fbReady
+    ?'<div class="squad-hint" style="margin-bottom:16px">Não consegui carregar o serviço do Top 30 agora. Tente recarregar a página.</div>'
+    :window.fbUser
+    ?`<div class="squad-hint" style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <span>Logado como <strong>${window.fbUser.name||'Jogador'}</strong></span>
+        <button class="btn-secondary" onclick="fbSignOut()">Sair</button>
+      </div>`
+    :`<div style="margin-bottom:16px">
+        <button class="btn-primary" onclick="fbSignIn()">Entrar com Google</button>
+        ${window.fbSignInError?`<div style="color:var(--danger);font-size:.8rem;margin-top:8px">${window.fbSignInError}</div>`:''}
+      </div>`;
+  // Só dispara o carregamento automático UMA vez (rows null E error null) —
+  // achado ao vivo: sem checar leaderboardError aqui, uma falha (ex.:
+  // regras do Firestore ainda não publicadas) reentrava nessa condição em
+  // TODO render seguinte (rows continuava null pra sempre depois de uma
+  // falha), disparando fbLoadLeaderboard() de novo a cada render — dezenas
+  // de chamadas repetidas. Falha agora exige clique manual em "Tentar de
+  // novo" pra reintentar, não fica martelando sozinho.
+  if(fbReady&&leaderboardRows===null&&!leaderboardLoading&&!leaderboardError){
+    leaderboardLoading=true;
+    window.fbLoadLeaderboard().then(function(res){
+      leaderboardLoading=false;
+      if(res&&res.ok){leaderboardRows=res.rows;} else {leaderboardError=(res&&res.error)||'erro desconhecido';}
+      renderLeaderboardScreen();
+    });
+  }
+  let listHtml;
+  if(!fbReady){
+    listHtml='';
+  } else if(leaderboardLoading){
+    listHtml='<div class="squad-hint">Carregando ranking...</div>';
+  } else if(leaderboardError){
+    listHtml='<div class="squad-hint">Não consegui carregar o ranking agora. <button class="btn-secondary" style="margin-top:8px" onclick="retryLeaderboardLoad()">Tentar de novo</button></div>';
+  } else if(!leaderboardRows||!leaderboardRows.length){
+    listHtml='<div class="squad-hint">Ninguém no Top 30 ainda — termine uma carreira no Modo Carreira e seja o primeiro!</div>';
+  } else {
+    listHtml=leaderboardRows.map(function(r,i){
+      const mine=window.fbUser&&r.uid===window.fbUser.uid;
+      return`<div class="history-item" style="${mine?'border-color:var(--accent);border-width:2px':''}">
+        <span class="hi-season">#${i+1}</span>
+        <span class="hi-record">${r.username} · ${r.clubName} · ${r.grade} · ${r.titles} título(s) · ${r.goals} gols</span>
+      </div>`;
+    }).join('');
+  }
+  root.innerHTML=`<div>
+    <div class="section-title" style="margin-bottom:8px">Top 30 — Modo Carreira</div>
+    <p style="font-size:.8rem;color:var(--muted);margin-bottom:16px">Ranking por nota da carreira, títulos e gols do artilheiro somados. Só carreiras enviadas por quem faz login entram aqui — Modo Carreira (técnico) por enquanto.</p>
+    ${userBlock}
+    <div class="history-list">${listHtml}</div>
+  </div>`;
+}
+
 // Números da barra de estatísticas do Gerador — calculados dos dados
 // REAIS (TEAMS/países distintos/SEASON_EVENTS/MAX_SEASONS) em vez de
 // hardcoded no HTML, que é exatamente como ficaram desatualizados antes
@@ -9403,6 +9538,91 @@ function renderPlayerCareer(){
 
 // Init career tab when first opened
 renderCareer();
+</script>
+
+<!-- Top 30 — login e Firestore. SDK do Firebase é ESM, por isso vive num
+     script type="module" separado do script clássico gigante acima. Só
+     expõe funções em window (fbSignIn/fbSignOut/fbSubmitCareer/
+     fbLoadLeaderboard) e o objeto window.fbUser — o script clássico é
+     quem decide o que fazer com isso (ver bloco "TOP 30" perto do fim
+     dele). Se isso falhar ao carregar (rede bloqueada, etc.), o resto do
+     jogo continua funcionando normal — cada função do lado clássico
+     confere typeof antes de chamar. -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc, collection, query, orderBy, limit, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCdeq3v-6_CJ6baypDPUsjUZ_nRugODXPQ",
+  authDomain: "carreiradraft.firebaseapp.com",
+  projectId: "carreiradraft",
+  storageBucket: "carreiradraft.firebasestorage.app",
+  messagingSenderId: "612084205505",
+  appId: "1:612084205505:web:8796484ebd38f3e5f85140"
+};
+
+const fbApp = initializeApp(firebaseConfig);
+const fbAuth = getAuth(fbApp);
+const fbDb = getFirestore(fbApp);
+
+window.fbSignIn = function(){
+  window.fbSignInError = null;
+  const provider = new GoogleAuthProvider();
+  signInWithPopup(fbAuth, provider).catch(function(e){
+    console.error('Falha no login com Google', e);
+    window.fbSignInError = 'Não foi possível entrar com Google. Tente de novo.';
+    if (typeof window.onFbAuthChanged === 'function') window.onFbAuthChanged();
+  });
+};
+window.fbSignOut = function(){
+  signOut(fbAuth);
+};
+// Só sobrescreve o registro existente se a pontuação nova for MAIOR — o
+// Top 30 guarda a MELHOR carreira de cada pessoa, não a última.
+window.fbSubmitCareer = async function(payload){
+  if(!fbAuth.currentUser) return { ok:false, error:'not-signed-in' };
+  const uid = fbAuth.currentUser.uid;
+  try{
+    const ref = doc(fbDb,'leaderboard',uid);
+    const existingSnap = await getDoc(ref);
+    if(existingSnap.exists() && existingSnap.data().score >= payload.score){
+      return { ok:true, improved:false };
+    }
+    await setDoc(ref, {
+      uid,
+      username: fbAuth.currentUser.displayName || 'Jogador sem nome',
+      clubName: payload.clubName,
+      grade: payload.grade,
+      gradeIndex: payload.gradeIndex,
+      titles: payload.titles,
+      goals: payload.goals,
+      score: payload.score,
+      updatedAt: serverTimestamp(),
+    });
+    return { ok:true, improved:true };
+  }catch(e){
+    console.error('Falha ao enviar carreira pro Top 30', e);
+    return { ok:false, error:String(e) };
+  }
+};
+window.fbLoadLeaderboard = async function(){
+  try{
+    const q = query(collection(fbDb,'leaderboard'), orderBy('score','desc'), limit(30));
+    const snap = await getDocs(q);
+    const rows = [];
+    snap.forEach(function(d){ rows.push(d.data()); });
+    return { ok:true, rows };
+  }catch(e){
+    console.error('Falha ao carregar o Top 30', e);
+    return { ok:false, error:String(e), rows:[] };
+  }
+};
+
+onAuthStateChanged(fbAuth, function(user){
+  window.fbUser = user ? { uid:user.uid, name:user.displayName, photo:user.photoURL } : null;
+  if(typeof window.onFbAuthChanged === 'function') window.onFbAuthChanged();
+});
 </script>
 </body>
 </html>
