@@ -1318,6 +1318,12 @@ function renderAchievementsScreen(){
 // Cada atualização real do site vira uma entrada aqui. A versão mais nova
 // (topo do array) é a que decide se o painel abre sozinho pra quem já visitou.
 const CHANGELOG=[
+  {version:'1.46',title:'Trajetória Completa: títulos, prêmios e correções',items:[
+    'Novo card de fim de temporada: mostra do que você está concorrendo (título da liga, prêmios individuais) e revela o resultado com um clique — "concorrer não é ganhar".',
+    'A liga inteira agora joga de verdade (não só o seu clube) — título é calculado pela tabela real, com critério de pontos e saldo de gols.',
+    'Corrigido: "Simular temporada inteira" parava no meio esperando uma decisão de Cuidar do Corpo em vez de simular a temporada inteira de uma vez — agora resolve sozinho e vai até o fim.',
+    'Corrigido: os números de overall/técnica/físico/mental na tela de criação apareciam empilhados e espremidos no canto direito — agora ficam em fileira, legíveis.',
+  ]},
   {version:'1.45',title:'Trajetória Completa — menos brutal',items:[
     'Recalibrado o quanto você joga na Trajetória Completa: "base de clube grande" tava dando só ~14% de participação numa temporada (a coisa toda parecia acabar do nada) — agora fica mais perto de 25-30%, ainda desafiador mas jogável de verdade.',
     '"Profissional em clube pequeno" também ficou mais generoso, e a dificuldade escolhida agora pesa direto nas suas chances de jogar, não só na evolução e no risco de lesão.',
@@ -9574,8 +9580,9 @@ function activePCFDifficulty(){
 function freshPCFState(){
   return{
     phase:'setup', difficulty:pendingPCFDifficulty, self:null, club:null,
-    season:0, matchday:0, schedule:null, matchLog:[],
+    season:0, matchday:0, schedule:null, matchLog:[], leagueTable:null,
     pendingBodyCare:false, lastBodyCareMatchday:0, chronicRisk:0,
+    seasonEndRevealed:false, pendingSeasonEndData:null,
     history:[], timeline:[],
   };
 }
@@ -9719,7 +9726,7 @@ function pcfCreateSelf(name,startType,archetypeId,legendId,personality,nat){
     archetypeId:legendId?null:archetypeId,
     legendId:legendId||null,
     personality,nationality:nat,
-    fatigue:0,moral:65,injuredUntilMatchday:null,injurySeverity:null,
+    fatigue:0,moral:65,injuredUntilMatchday:null,injurySeverity:null,titlesWon:0,
     seasonGames:0,seasonGoals:0,seasonAssists:0,seasonTackles:0,seasonSaves:0,seasonCleanSheets:0,
     ovrHistory:[{season:0,ovr}],
   };
@@ -9761,7 +9768,12 @@ function renderPCFSetup(){
   const preview=pcfPreviewSelf();
   const previewArchetype=PCF_ARCHETYPES.find(a=>a.id===pcfDraft.archetypeId);
   const catAvg=(list)=>Math.round(list.reduce((s,k)=>s+preview.attrs[k],0)/list.length);
-  const previewCats=`<div class="strength-readout" style="margin-bottom:16px;display:flex;gap:16px;flex-wrap:wrap">
+  // NÃO reaproveita .strength-readout aqui — aquela classe é
+  // flex-direction:column + align-items:flex-end, desenhada pra UM
+  // readout só (label+valor) grudado no canto direito. Forçar 4 pares
+  // dentro dela empilhava tudo na vertical espremido na borda direita em
+  // vez de virar uma fileira — bug achado numa captura de tela real.
+  const previewCats=`<div style="margin-bottom:16px;display:flex;gap:24px;flex-wrap:wrap">
     <div><div class="strength-label">Overall</div><div class="strength-value">≈${preview.ovr}</div></div>
     <div><div class="strength-label">Técnica</div><div class="strength-value">≈${catAvg(pcfTechAttrsFor(preview.pos))}</div></div>
     <div><div class="strength-label">Físico</div><div class="strength-value">≈${catAvg(PCF_FISICO_ATTRS)}</div></div>
@@ -9821,6 +9833,16 @@ function pcfBeginSeason(){
   const p=playerCareerFull.self;
   p.seasonGames=0;p.seasonGoals=0;p.seasonAssists=0;p.seasonTackles=0;p.seasonSaves=0;p.seasonCleanSheets=0;
   playerCareerFull.lastBodyCareMatchday=0;
+  // Tabela da liga (pedido: "títulos" no card de fim de temporada) —
+  // mesmo padrão do Modo Carreira técnico (applyResult, W/D/L/GF/GA/Pts
+  // por time), reaproveitado direto. Sem isso não dava pra saber se o
+  // clube foi campeão, só o desempenho pessoal do jogador.
+  const table={};
+  table[c.n]={n:c.n,str:c.str,W:0,D:0,L:0,GF:0,GA:0,Pts:0,mine:true};
+  c.teams.forEach(t=>{table[t.n]={n:t.n,str:t.str,W:0,D:0,L:0,GF:0,GA:0,Pts:0,mine:false};});
+  playerCareerFull.leagueTable=table;
+  playerCareerFull.seasonEndRevealed=false;
+  playerCareerFull.pendingSeasonEndData=null;
 }
 function pcfMatchdayFixture(){
   if(!playerCareerFull.schedule||playerCareerFull.matchday>=playerCareerFull.schedule.length)return null;
@@ -9939,16 +9961,33 @@ function pcfCheckMilestones(c,fx,hg,ag,isHome){
     pcfPushTimeline('🎩',`Hat-trick! ${c.goals} gols numa partida só, contra o ${opponent}.`,'positive');
   }
 }
+// Simula a rodada INTEIRA (todo mundo joga, não só o clube do jogador) —
+// pedido de "títulos" no card de fim de temporada exige saber a
+// classificação real da liga, não só o resultado do meu jogo. Reaproveita
+// applyResult() do Modo Carreira técnico sem alteração pra manter a
+// tabela (W/D/L/GF/GA/Pts).
 function resolvePCFMatchday(){
-  const fx=pcfMatchdayFixture();
-  if(!fx){playerCareerFull.matchday++;return;}
-  const p=playerCareerFull.self,c=playerCareerFull.club;
-  const isHome=fx.home===c.n;
-  const myLiveStr=clamp(p.ovr*0.55+c.str*0.45,30,99);
-  const rivalStr=t=>{const r=c.teams.find(x=>x.n===t);return r?r.str:c.str;};
-  const homeStr=isHome?myLiveStr:rivalStr(fx.home);
-  const awayStr=isHome?rivalStr(fx.away):myLiveStr;
-  const{hg,ag}=singleMatch(homeStr+5,awayStr);
+  if(!playerCareerFull.schedule||playerCareerFull.matchday>=playerCareerFull.schedule.length)return;
+  const round=playerCareerFull.schedule[playerCareerFull.matchday];
+  const p=playerCareerFull.self,c=playerCareerFull.club,table=playerCareerFull.leagueTable;
+  let fx=null,hg=0,ag=0,isHome=false;
+  round.forEach(f=>{
+    const isMine=f.home===c.n||f.away===c.n;
+    let res;
+    if(isMine){
+      fx=f;isHome=f.home===c.n;
+      const myLiveStr=clamp(p.ovr*0.55+c.str*0.45,30,99);
+      const homeStr=isHome?myLiveStr:table[f.home].str;
+      const awayStr=isHome?table[f.away].str:myLiveStr;
+      res=singleMatch(homeStr+5,awayStr);
+      hg=res.hg;ag=res.ag;
+    } else {
+      res=singleMatch(table[f.home].str+5,table[f.away].str);
+    }
+    applyResult(table[f.home],res.hg,res.ag);
+    applyResult(table[f.away],res.ag,res.hg);
+  });
+  if(!fx){playerCareerFull.matchday++;return;} // bye da rodada (liga com número ímpar de times)
   const myClubGoals=isHome?hg:ag;
   const myClubConceded=isHome?ag:hg;
   const selected=Math.random()<pcfSelectionChance();
@@ -9974,9 +10013,18 @@ function pcfAdvanceOneRound(){
   savePCFState();
   renderPCFull();
 }
+// "Simular temporada inteira" é o botão de piloto automático — parar no
+// meio pra esperar clique numa decisão de Cuidar do Corpo quebrava a
+// promessa do próprio texto do botão (bug relatado: "não simula, quero
+// que não faça perguntas, só simule"). Resolve a decisão sozinho com a
+// opção neutra ("Rotina Balanceada") e continua direto até o fim da
+// temporada. "Próxima rodada" (uma de cada vez) continua parando pra
+// deixar o jogador escolher de verdade — só o modo "inteira" que vira
+// automático.
 function pcfSimulateRestOfSeason(){
   let guard=0;
-  while(playerCareerFull.phase==='active'&&!playerCareerFull.pendingBodyCare&&guard<200){
+  while(playerCareerFull.phase==='active'&&guard<200){
+    if(playerCareerFull.pendingBodyCare){ pcfApplyBodyCare('equilibrio'); continue; }
     if(!playerCareerFull.schedule||playerCareerFull.matchday>=playerCareerFull.schedule.length){pcfFinishSeason();break;}
     resolvePCFMatchday();
     guard++;
@@ -10039,6 +10087,42 @@ function pcfEvolveAttrs(){
   if(p.pot<p.ovr)p.pot=p.ovr;
   p.ovrHistory.push({season:playerCareerFull.season,ovr:p.ovr});
 }
+// Classificação final — mesmo critério de desempate do Modo Carreira
+// técnico (computeFinalResultFromTable: pontos, depois saldo de gols).
+function pcfComputeStandings(){
+  const table=playerCareerFull.leagueTable;
+  const rows=Object.values(table);
+  const sorted=rows.slice().sort((a,b)=>{
+    if(b.Pts!==a.Pts)return b.Pts-a.Pts;
+    return(b.GF-b.GA)-(a.GF-a.GA);
+  });
+  const pos=sorted.findIndex(t=>t.mine)+1;
+  return{pos,total:sorted.length,champion:sorted[0].n};
+}
+const PCF_AWARD_LABELS={chuteira:'Chuteira de Ouro da Liga',bola:'Bola de Ouro da Liga',jovem:'Melhor Jovem da Liga'};
+// Mesmo espírito do pcComputeSeasonAwards() da Carreira de Jogador leve
+// ("concorrer não é ganhar" — elegibilidade e resultado separados), só
+// que o meritScore usa a régua certa por statType (pedido 5) em vez de
+// sempre gol+assistência — um volante ou goleiro TAMBÉM pode concorrer a
+// Bola de Ouro, só não a Chuteira (isso é exclusivo de quem ataca).
+function pcfComputeSeasonAwards(){
+  const p=playerCareerFull.self,c=playerCareerFull.club;
+  const archetype=PCF_ARCHETYPES.find(a=>a.id===p.archetypeId);
+  const statType=archetype?archetype.statType:'attack';
+  let meritScore;
+  if(statType==='defense')meritScore=p.seasonTackles*0.3+((p.ovr-c.str)/4);
+  else if(statType==='gk')meritScore=p.seasonSaves*0.15+p.seasonCleanSheets*1.5+((p.ovr-c.str)/4);
+  else meritScore=p.seasonGoals*1.2+p.seasonAssists+((p.ovr-c.str)/4);
+  const r={
+    chuteira:{eligible:statType==='attack'&&p.seasonGoals>0,won:false},
+    bola:{eligible:meritScore>=8,won:false},
+    jovem:{eligible:p.age<=21&&meritScore>=5,won:false},
+  };
+  if(r.chuteira.eligible)r.chuteira.won=Math.random()<clamp(p.seasonGoals/20,0.05,0.7);
+  if(r.bola.eligible)r.bola.won=Math.random()<clamp(meritScore/25,0.05,0.6);
+  if(r.jovem.eligible)r.jovem.won=Math.random()<0.4;
+  return r;
+}
 function pcfFinishSeason(){
   const p=playerCareerFull.self;
   // pcfEvolveAttrs() PRIMEIRO — ovrEnd tem que refletir o overall JÁ COM a
@@ -10046,8 +10130,36 @@ function pcfFinishSeason(){
   // um número que não bate com o cabeçalho (que já lê o overall ao vivo,
   // pós-evolução) nem com ovrHistory.
   pcfEvolveAttrs();
-  playerCareerFull.history.push({season:playerCareerFull.season,club:playerCareerFull.club.n,games:p.seasonGames,goals:p.seasonGoals,assists:p.seasonAssists,tackles:p.seasonTackles,saves:p.seasonSaves,cleanSheets:p.seasonCleanSheets,ovrEnd:p.ovr});
+  const standings=pcfComputeStandings();
+  const awards=pcfComputeSeasonAwards();
+  // Resultado já é decidido aqui (sem aleatoriedade escondida pro momento
+  // do clique) — só a REVELAÇÃO na tela é que fica pendente, pedido
+  // explícito: "e se esta concorrendo a algo e depois revele o vencedor".
+  playerCareerFull.pendingSeasonEndData={standings,awards};
+  playerCareerFull.seasonEndRevealed=false;
+  playerCareerFull.history.push({season:playerCareerFull.season,club:playerCareerFull.club.n,games:p.seasonGames,goals:p.seasonGoals,assists:p.seasonAssists,tackles:p.seasonTackles,saves:p.seasonSaves,cleanSheets:p.seasonCleanSheets,ovrEnd:p.ovr,pos:standings.pos,total:standings.total,champion:standings.pos===1,awards:[]});
   playerCareerFull.phase='seasonEnd';
+}
+function pcfRevealSeasonEnd(){
+  const data=playerCareerFull.pendingSeasonEndData;
+  if(!data)return;
+  const p=playerCareerFull.self;
+  const h=playerCareerFull.history[playerCareerFull.history.length-1];
+  if(data.standings.pos===1){
+    p.titlesWon=(p.titlesWon||0)+1;
+    pcfPushTimeline('🏆',(p.titlesWon===1?'Primeiro título da carreira! ':'Mais um título! ')+`${playerCareerFull.club.n} campeão na Temporada ${playerCareerFull.season}.`,'positive');
+  }
+  const wonLabels=[];
+  Object.keys(data.awards).forEach(k=>{
+    if(data.awards[k].won){
+      wonLabels.push(PCF_AWARD_LABELS[k]);
+      pcfPushTimeline('🏅',`Recebeu: ${PCF_AWARD_LABELS[k]}.`,'positive');
+    }
+  });
+  h.awards=wonLabels;
+  playerCareerFull.seasonEndRevealed=true;
+  savePCFState();
+  renderPCFull();
 }
 function pcfContinueFromSeasonEnd(){
   const p=playerCareerFull.self;
@@ -10108,24 +10220,47 @@ function renderPCFBodyCare(){
     <div class="style-grid">${cards}</div>
   </div>`;
 }
+// Card de fim de temporada — pedido explícito: "gols assistencias
+// titulos e se esta concorrendo a algo e depois revele o vencedor".
+// Estatísticas pessoais (jogos/gols-ou-desarmes-ou-defesas) já são fato
+// conhecido, mostra direto. Título da liga e prêmios individuais ficam
+// como NOMINAÇÃO até o clique em "Revelar resultado" — mesmo espírito
+// de "concorrer não é ganhar" já usado na Carreira de Jogador leve.
 function renderPCFSeasonEnd(){
   const p=playerCareerFull.self;
   const archetype=PCF_ARCHETYPES.find(a=>a.id===p.archetypeId);
   const statLine=archetype&&archetype.statType==='defense'?`${p.seasonTackles} desarmes`
     :archetype&&archetype.statType==='gk'?`${p.seasonSaves} defesas, ${p.seasonCleanSheets} jogos sem sofrer gol`
     :`${p.seasonGoals} gols, ${p.seasonAssists} assistências`;
-  return`<div>
-    <div class="section-title" style="margin-bottom:8px">Fim da Temporada ${playerCareerFull.season}</div>
-    <p style="font-size:.9rem;color:var(--text);margin-bottom:16px">${p.seasonGames} jogos · ${statLine} · Overall ${p.ovr}</p>
-    <button class="btn-primary" onclick="pcfContinueFromSeasonEnd()">Continuar →</button>
+  const data=playerCareerFull.pendingSeasonEndData;
+  const header=`<div class="section-title" style="margin-bottom:8px">Fim da Temporada ${playerCareerFull.season}</div>
+    <p style="font-size:.9rem;color:var(--text);margin-bottom:16px">${p.seasonGames} jogos · ${statLine} · Overall ${p.ovr}</p>`;
+  if(!data)return header+`<button class="btn-primary" onclick="pcfContinueFromSeasonEnd()">Continuar →</button>`;
+  if(!playerCareerFull.seasonEndRevealed){
+    const nomLines=[`🏆 Título da liga — posição ainda não revelada (${data.standings.total} times na disputa)`];
+    Object.keys(data.awards).forEach(k=>{ if(data.awards[k].eligible)nomLines.push('🎖️ '+PCF_AWARD_LABELS[k]); });
+    const nomHtml=`<div class="squad-hint" style="margin-bottom:16px">
+      <div style="font-weight:800;margin-bottom:6px">Concorrendo a:</div>
+      ${nomLines.map(l=>`<div style="margin-bottom:4px">${l}</div>`).join('')}
+    </div>`;
+    return header+nomHtml+`<button class="btn-primary" onclick="pcfRevealSeasonEnd()">Revelar resultado →</button>`;
+  }
+  const h=playerCareerFull.history[playerCareerFull.history.length-1];
+  const titleLine=h.champion?`🏆 <strong>CAMPEÃO!</strong> ${playerCareerFull.club.n} terminou em 1º de ${h.total} times.`:`Terminou em ${h.pos}º de ${h.total} times.`;
+  const awardLines=Object.keys(data.awards).filter(k=>data.awards[k].eligible).map(k=>data.awards[k].won?`✅ ${PCF_AWARD_LABELS[k]}`:`❌ Concorreu à ${PCF_AWARD_LABELS[k]}, não levou.`);
+  const resultHtml=`<div class="squad-hint" style="margin-bottom:16px">
+    <div style="margin-bottom:6px">${titleLine}</div>
+    ${awardLines.length?awardLines.map(l=>`<div style="margin-bottom:4px">${l}</div>`).join(''):'<div>Não entrou na briga por nenhum prêmio individual essa temporada.</div>'}
   </div>`;
+  return header+resultHtml+`<button class="btn-primary" onclick="pcfContinueFromSeasonEnd()">Continuar →</button>`;
 }
 function renderPCFSummary(){
   const p=playerCareerFull.self;
   const totalGames=playerCareerFull.history.reduce((s,h)=>s+h.games,0);
+  const totalAwards=playerCareerFull.history.reduce((s,h)=>s+(h.awards?h.awards.length:0),0);
   return`<div>
     <div class="section-title" style="margin-bottom:8px">Fim de Carreira</div>
-    <p style="font-size:.9rem;color:var(--text);margin-bottom:16px">${p.name} encerrou ${playerCareerFull.history.length} temporadas, ${totalGames} jogos, overall final ${p.ovr} (começou em ${p.ovrHistory[0].ovr}).</p>
+    <p style="font-size:.9rem;color:var(--text);margin-bottom:16px">${p.name} encerrou ${playerCareerFull.history.length} temporadas, ${totalGames} jogos, ${p.titlesWon||0} título(s), ${totalAwards} prêmio(s) individual(is), overall final ${p.ovr} (começou em ${p.ovrHistory[0].ovr}).</p>
     ${pcfRenderTimeline()}
     <button class="btn-secondary" style="margin-top:16px" onclick="playerCareerFull=freshPCFState();try{localStorage.removeItem(PCF_SAVE_KEY);}catch(e){}renderPCFull();">← Nova trajetória</button>
   </div>`;
