@@ -614,6 +614,30 @@ h1,h2,h3{font-family:var(--f-display);font-weight:700;font-variation-settings:'w
 .hi-pos{font-size:1.1rem;font-weight:900;color:var(--text);font-variant-numeric:tabular-nums;min-width:28px}
 .hi-record{font-size:.82rem;color:var(--muted);flex:1;font-variant-numeric:tabular-nums}
 .hi-trophy{font-size:1rem}
+/* Top 30 — reclamação explícita "muito feio, tem que ter mais vida":
+   .history-item tratava ranking igual timeline (texto corrido com ·).
+   Aqui cada linha vira um cartão de verdade: medalha nos 3 primeiros,
+   nome em destaque, clube/seleção como subtítulo, troféus+gols como
+   selos secundários e a nota (S+/PATRIMÔNIO NACIONAL/etc.) grande à
+   direita — é o nosso "número grande colorido", só que é a nota, não
+   um overall solto (não temos um número de 0-99 pro ranking global). */
+.lb-list{display:flex;flex-direction:column;gap:6px;margin-bottom:20px}
+.lb-row{display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:12px 16px;transition:border-color .15s}
+.lb-row:hover{border-color:var(--accent-dim)}
+.lb-row.mine{border-color:var(--accent);border-width:2px}
+.lb-row.lb-top3{background:var(--accent-light);border-color:var(--accent-dim)}
+.lb-rank{width:34px;flex-shrink:0;text-align:center;font-size:1rem;font-weight:800;color:var(--muted);font-family:var(--f-mono)}
+.lb-top3 .lb-rank{font-size:1.5rem}
+.lb-id{flex:1;min-width:0}
+.lb-name{font-size:.98rem;font-weight:800;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lb-sub{font-size:.74rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.lb-stats{display:flex;gap:14px;flex-shrink:0;font-family:var(--f-mono);font-size:.8rem;color:var(--muted)}
+.lb-grade{font-size:1.3rem;font-weight:900;color:var(--accent);font-family:var(--f-mono);text-align:right;max-width:120px;line-height:1.1}
+@media(max-width:640px){
+  .lb-stats{display:none}
+  .lb-row{gap:10px;padding:10px 12px}
+  .lb-grade{font-size:1.05rem;max-width:88px}
+}
 .trophies-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;justify-content:center}
 .trophy-chip{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:8px 14px;font-size:.82rem;font-weight:600;display:flex;align-items:center;gap:6px}
 .trophy-continental{border-left:3px solid var(--accent)}
@@ -717,6 +741,7 @@ footer{border-top:1px solid var(--border);padding:28px 0}
     <button class="tab-btn active" data-tab="gen" onclick="switchTab('gen')">🎲 Gerador</button>
     <button class="tab-btn" data-tab="career" onclick="switchTab('career')">🏆 Modo Carreira</button>
     <button class="tab-btn" data-tab="playercareer" onclick="switchTab('playercareer')">👟 Carreira de Jogador</button>
+    <button class="tab-btn" data-tab="trajetoria" onclick="switchTab('trajetoria')">🧭 Trajetória Completa</button>
     <button class="tab-btn" data-tab="worldcup" onclick="switchTab('worldcup')">🌍 Copa do Mundo</button>
     <button class="tab-btn" data-tab="achievements" onclick="switchTab('achievements')">🏅 Conquistas</button>
     <button class="tab-btn" data-tab="leaderboard" onclick="switchTab('leaderboard')">🌐 Top 30</button>
@@ -832,6 +857,11 @@ footer{border-top:1px solid var(--border);padding:28px 0}
     <!-- PLAYER CAREER TAB -->
     <div class="tab-pane" id="tab-playercareer">
       <div class="career-wrap" id="playercareer-root"></div>
+    </div>
+
+    <!-- TRAJETÓRIA COMPLETA TAB -->
+    <div class="tab-pane" id="tab-trajetoria">
+      <div class="career-wrap" id="trajetoria-root"></div>
     </div>
 
     <!-- WORLD CUP TAB -->
@@ -1288,6 +1318,10 @@ function renderAchievementsScreen(){
 // Cada atualização real do site vira uma entrada aqui. A versão mais nova
 // (topo do array) é a que decide se o painel abre sozinho pra quem já visitou.
 const CHANGELOG=[
+  {version:'1.43',title:'Top 30 com mais vida + prévia da Trajetória Completa',items:[
+    'Visual novo do Top 30: medalha nos 3 primeiros colocados, nome em destaque, clube/seleção como subtítulo, troféus e gols como selos e a nota em grande à direita — muito mais vivo que a lista de texto corrido de antes.',
+    'Prévia: novo modo "Trajetória Completa" na barra lateral — uma carreira de jogador bem mais profunda que a Carreira de Jogador de hoje, com atributos por categoria (técnica, físico, mental) e arquétipos por posição. Ainda em construção — a criação do jogador já funciona, o motor de temporada vem na sequência.',
+  ]},
   {version:'1.42',title:'Visual novo: barra lateral e paleta de cinza',items:[
     'Redesenho completo do layout: menu virou uma barra lateral fixa (igual a de plataformas de produtividade que você já usa), liberando bem mais espaço na tela pra tudo — clubes, tabelas, elenco.',
     'Nova seção "Seus saves" na barra lateral, mostrando sua carreira e sua Carreira de Jogador em andamento com um clique pra voltar direto.',
@@ -1561,6 +1595,7 @@ function switchTab(t){
   if(pageHead)pageHead.style.display=t==='gen'?'':'none';
   if(t==='career'&&!career.club&&career.phase==='setup')renderCareer();
   if(t==='playercareer')renderPlayerCareer();
+  if(t==='trajetoria')renderPCFull();
   if(t==='worldcup')renderWC();
   if(t==='achievements')renderAchievementsScreen();
   if(t==='leaderboard')renderLeaderboardScreen();
@@ -9483,6 +9518,291 @@ function renderPlayerCareer(){
 }
 
 // ══════════════════════════════════════════════════════════════════
+// TRAJETÓRIA COMPLETA — segundo modo de carreira de jogador, pedido
+// explícito do Lohan como algo SEPARADO da Carreira de Jogador "leve"
+// (draft de lendas + janela de transferência como única decisão
+// recorrente, carreira inteira em poucos minutos, feita pra rejogar
+// várias vezes). Trajetória Completa é o oposto: lenta, com muitas
+// alavancas, pensada pra ser vivida uma vez com profundidade. Os dois
+// modos reaproveitam a MESMA base (TEAMS, singleMatch,
+// generateRoundRobinSchedule, calibração de overall) mas nunca a mesma
+// tela, o mesmo save (PCF_SAVE_KEY é 100% separado de PC_SAVE_KEY) nem
+// o mesmo ritmo — pedido explícito: "nunca a mesma tela nem o mesmo
+// ritmo". A Carreira de Jogador leve NÃO foi tocada por essa seção.
+// ══════════════════════════════════════════════════════════════════
+const PCF_SAVE_KEY='carreiraDraftTrajetoriaSave';
+
+// 3 níveis específicos desse modo — não reaproveita DIFFICULTY_LEVELS
+// (Modo Carreira técnico + Carreira de Jogador leve) porque os eixos que
+// esse modo ajusta são outros: velocidade de evolução, risco de lesão
+// nas escolhas de cuidado com o corpo, velocidade da escada de
+// reputação e o quanto uma decisão ruim pesa na trajetória — nenhum
+// desses existe nos outros dois modos. Nenhum nível desliga mecânica
+// nenhuma, só calibra o quanto elas pesam (pedido explícito: "as
+// mecânicas continuam ativas, só suavizadas").
+const PCF_DIFFICULTY_LEVELS=[
+  {id:'artilheiro_nato',label:'Artilheiro Nato',evoMult:1.35,injuryMult:0.7,repMult:1.4,consequenceMult:0.6,
+    desc:'Foco em diversão e carreira de gols sem toda a complexidade. Curva de evolução mais generosa (menos temporadas de aquecimento antes de virar produtivo), risco de lesão reduzido nas escolhas de cuidado com o corpo, e reputação sobe mais rápido na escada em tempo real.'},
+  {id:'trajetoria_justa',label:'Trajetória Justa',evoMult:1,injuryMult:1,repMult:1,consequenceMult:1,
+    desc:'O padrão, sem ajuste artificial — equilíbrio real entre quem quer curtir a história e quem quer sentir o peso das escolhas.'},
+  {id:'osso_duro',label:'Osso Duro de Roer',evoMult:0.75,injuryMult:1.35,repMult:0.85,consequenceMult:1.5,
+    desc:'Evolução mais lenta e exigente, fadiga e risco de lesão mais punitivos, e as consequências de uma decisão ruim (empresário mal escolhido, recusa por lealdade) pesam de verdade na trajetória — sem rede de segurança.'},
+];
+let pendingPCFDifficulty='trajetoria_justa';
+function setPendingPCFDifficulty(id){ pendingPCFDifficulty=id; renderPCFull(); }
+function activePCFDifficulty(){
+  // Antes da criação (phase==='setup') o valor que manda é sempre o
+  // picker ao vivo (pendingPCFDifficulty) — playerCareerFull.difficulty só
+  // passa a ser a fonte da verdade DEPOIS que a criação travar a escolha
+  // (mesmo padrão do pcSubmitCreate() da Carreira de Jogador leve: o save
+  // real só nasce no momento da criação, nunca antes).
+  const id=(playerCareerFull&&playerCareerFull.phase!=='setup'&&playerCareerFull.difficulty)?playerCareerFull.difficulty:pendingPCFDifficulty;
+  return PCF_DIFFICULTY_LEVELS.find(d=>d.id===id)||PCF_DIFFICULTY_LEVELS[1];
+}
+
+function freshPCFState(){
+  return{ phase:'setup', difficulty:pendingPCFDifficulty, self:null, club:null, season:0 };
+}
+let playerCareerFull=freshPCFState();
+
+function renderPCFDifficultyPicker(){
+  return`<div class="style-grid" style="margin-bottom:8px">${PCF_DIFFICULTY_LEVELS.map(d=>`<div class="style-card ${d.id===pendingPCFDifficulty?'active':''}" onclick="setPendingPCFDifficulty('${d.id}')">
+    <div class="style-head"><span class="style-name">${d.label}</span></div>
+    <div class="style-desc">${d.desc}</div>
+  </div>`).join('')}</div>`;
+}
+
+// ── ATRIBUTOS EM 3 CATEGORIAS (pedido 1.1) ───────────
+// Goleiro usa uma lista TÉCNICA própria (reflexos/saída de gol/etc. — os
+// 6 atributos técnicos de linha não fazem sentido pra quem defende o
+// gol); FÍSICO e MENTAL são compartilhados por todo mundo, inclusive
+// goleiro (agilidade/concentração importam igual).
+const PCF_TECH_ATTRS_OUTFIELD=['finalizacao','passe','controle','drible','cruzamento','cabeceio'];
+const PCF_TECH_ATTRS_GK=['reflexos','posicionamentoGol','saidaDeGol','reposicao','jogoComPes','penaltis'];
+const PCF_FISICO_ATTRS=['velocidade','aceleracao','forca','resistencia','agilidade','salto'];
+const PCF_MENTAL_ATTRS=['visaoDeJogo','posicionamento','compostura','tomadaDeDecisao','concentracao','lideranca'];
+const PCF_ATTR_LABELS={
+  finalizacao:'Finalização',passe:'Passe',controle:'Controle',drible:'Drible',cruzamento:'Cruzamento',cabeceio:'Cabeceio',
+  reflexos:'Reflexos',posicionamentoGol:'Posicionamento de Gol',saidaDeGol:'Saída de Gol',reposicao:'Reposição',jogoComPes:'Jogo com os Pés',penaltis:'Pênaltis',
+  velocidade:'Velocidade',aceleracao:'Aceleração',forca:'Força',resistencia:'Resistência',agilidade:'Agilidade',salto:'Salto',
+  visaoDeJogo:'Visão de Jogo',posicionamento:'Posicionamento',compostura:'Compostura',tomadaDeDecisao:'Tomada de Decisão',concentracao:'Concentração',lideranca:'Liderança',
+};
+function pcfTechAttrsFor(pos){ return pos==='GL'?PCF_TECH_ATTRS_GK:PCF_TECH_ATTRS_OUTFIELD; }
+
+// ── ARQUÉTIPOS POR POSIÇÃO (pedido 1.2) — todos viáveis, cada um com
+// 3 atributos-assinatura que pesam mais na evolução/avaliação (item 5:
+// nunca julgar goleiro ou zagueiro pela régua de artilheiro).
+const PCF_ARCHETYPES=[
+  {id:'finalizador',name:'O Finalizador',pos:'CA',icon:'⚽',tag:'especialista em gol',signature:['finalizacao','cabeceio','compostura'],metricLabel:'gols'},
+  {id:'armador',name:'O Armador',pos:'MC',icon:'🎯',tag:'assistências e visão de jogo',signature:['passe','visaoDeJogo','controle'],metricLabel:'assistências'},
+  {id:'driblador',name:'O Driblador',pos:'AE',icon:'⚡',tag:'criação via drible',signature:['drible','agilidade','aceleracao'],metricLabel:'dribles certos'},
+  {id:'motor',name:'O Motor',pos:'VL',icon:'🔋',tag:'box-to-box, cobre o campo inteiro',signature:['resistencia','tomadaDeDecisao','forca'],metricLabel:'participação (ataque+defesa)'},
+  {id:'volante',name:'O Volante',pos:'VL',icon:'🛡️',tag:'marca e constrói',signature:['posicionamento','forca','concentracao'],metricLabel:'desarmes/interceptações'},
+  {id:'defensor',name:'O Defensor',pos:'ZD',icon:'🧱',tag:'a parede da zaga',signature:['posicionamento','forca','cabeceio'],metricLabel:'desarmes/jogos sem sofrer gol'},
+  {id:'goleiro',name:'O Goleiro',pos:'GL',icon:'🧤',tag:'a última linha',signature:['reflexos','posicionamentoGol','concentracao'],metricLabel:'defesas/jogos sem sofrer gol'},
+];
+
+// ── PERSONALIDADE (pedido 1.3) — ainda não wireada em nenhuma decisão
+// (isso é MUITO IMPORTANTE/IMPORTANTE, não CRÍTICO — chega numa leva
+// seguinte); guardada desde já pra não precisar migrar save depois.
+const PCF_PERSONALITIES=[
+  {id:'profissional',label:'Profissional',desc:'Constante, sem drama — a imprensa nunca tem muito o que noticiar.'},
+  {id:'ambicioso',label:'Ambicioso',desc:'Sempre de olho no próximo passo — propostas maiores pesam mais na cabeça.'},
+  {id:'lider',label:'Líder',desc:'Puxa o vestiário — some ponto extra de peso quando vira capitão.'},
+  {id:'reservado',label:'Reservado',desc:'Fala pouco, deixa o futebol falar — a imprensa te deixa mais em paz.'},
+  {id:'rebelde',label:'Rebelde',desc:'Não engole desaforo — cobrar na imprensa vem mais fácil, pra bem e pra mal.'},
+  {id:'leal',label:'Leal',desc:'Clube pesa mais que contrato — recusar proposta por lealdade dói menos.'},
+  {id:'competitivo',label:'Competitivo',desc:'Banco de reservas incomoda de verdade — reage rápido a qualquer sinal de perder espaço.'},
+  {id:'estrela',label:'Estrela',desc:'Feito pros holofotes — a escada de reputação sobe mais rápido, mas a cobrança também.'},
+];
+
+// ── CRIAÇÃO ───────────────────────────────────────────
+let pcfDraft={name:'',archetypeId:'finalizador',legendId:null,personality:'profissional',nat:'br',startType:'base',__error:null};
+function pcfSetDraft(field,value){
+  pcfDraft[field]=value;
+  if(field==='legendId'&&value)pcfDraft.archetypeId=null; // lenda e arquétipo são mutuamente exclusivos — a lenda já traz posição própria
+  if(field==='archetypeId'&&value)pcfDraft.legendId=null;
+  if(field==='name'){pcfDraft.__error=null;return;} // mesma razão do pcSetDraft: input não pode perder foco a cada letra
+  renderPCFull();
+}
+function pcfActivePos(){
+  if(pcfDraft.legendId){const l=LEGEND_ARCHETYPES.find(x=>x.id===pcfDraft.legendId);return l?l.pos:'CA';}
+  const a=PCF_ARCHETYPES.find(x=>x.id===pcfDraft.archetypeId);
+  return a?a.pos:'CA';
+}
+// Rola os 18 atributos nomeados a partir de uma base por ponto de partida
+// (mesmas faixas de pcRollStartOvr, só que por atributo em vez de um ovr
+// só) + empurrão nos 3 atributos-assinatura do arquétipo (ou boost
+// genérico proporcional se veio de lenda, já que lenda só tem
+// ovrBonus/potBonus, sem detalhe por atributo).
+function pcfRollAttrs(startType,archetypeId,legendId){
+  const pos=legendId?(LEGEND_ARCHETYPES.find(l=>l.id===legendId)||{}).pos||'CA':(PCF_ARCHETYPES.find(a=>a.id===archetypeId)||{}).pos||'CA';
+  const archetype=PCF_ARCHETYPES.find(a=>a.id===archetypeId);
+  const legend=legendId?LEGEND_ARCHETYPES.find(l=>l.id===legendId):null;
+  const baseLo=startType==='base'?42:48, baseHi=startType==='base'?58:62;
+  const attrs={};
+  const allAttrs=[...pcfTechAttrsFor(pos),...PCF_FISICO_ATTRS,...PCF_MENTAL_ATTRS];
+  allAttrs.forEach(k=>{ attrs[k]=Math.floor(baseLo+Math.random()*(baseHi-baseLo)); });
+  if(archetype&&!legend){
+    archetype.signature.forEach(k=>{ if(attrs[k]!==undefined)attrs[k]=clamp(attrs[k]+12,1,90); });
+  }
+  if(legend){
+    // Sem lista de atributo por lenda (o modo leve só tem ovrBonus/potBonus
+    // temáticos) — aplica o mesmo empurrão em TODOS os atributos, escalado
+    // pra não estourar a régua de 0-99 usada aqui (o modo leve usa 40-96
+    // de ovr direto, essa régua aqui é 1-90 de atributo nomeado).
+    const push=Math.round(legend.ovrBonus*1.3);
+    allAttrs.forEach(k=>{ attrs[k]=clamp(attrs[k]+push,1,90); });
+  }
+  return{pos,attrs};
+}
+// Média ponderada dos atributos-assinatura (peso 2) + resto (peso 1) —
+// vira o "ovr" que o motor de partida/calibração já existente consome
+// sem alteração (pedido 6: "calibração realista de overall aplica sem
+// alteração"). Não é um número novo pro jogador otimizar: é só a MESMA
+// nota, calculada a partir dos atributos em vez de rolada solta.
+function pcfDeriveOvr(pos,attrs,archetypeId){
+  const archetype=PCF_ARCHETYPES.find(a=>a.id===archetypeId);
+  const all=[...pcfTechAttrsFor(pos),...PCF_FISICO_ATTRS,...PCF_MENTAL_ATTRS];
+  let wsum=0,wtot=0;
+  all.forEach(k=>{
+    const w=(archetype&&archetype.signature.includes(k))?2:1;
+    wsum+=attrs[k]*w; wtot+=w;
+  });
+  return Math.round(wsum/wtot);
+}
+function pcfPreviewSelf(){
+  // Prévia estável — mesmo princípio de pcPreviewOvr: mostra uma rolagem
+  // fixa (seed pelo nome+arquétipo+lenda+início, não Math.random puro) pra
+  // não ficar piscando número aleatório a cada render/clique.
+  const seedStr=(pcfDraft.legendId||pcfDraft.archetypeId||'')+pcfDraft.startType;
+  let seed=0; for(let i=0;i<seedStr.length;i++)seed=(seed*31+seedStr.charCodeAt(i))>>>0;
+  const rand=()=>{ seed=(seed*1103515245+12345)>>>0; return (seed%1000)/1000; };
+  const origRandom=Math.random; Math.random=rand;
+  const{pos,attrs}=pcfRollAttrs(pcfDraft.startType,pcfDraft.archetypeId,pcfDraft.legendId);
+  Math.random=origRandom;
+  return{pos,attrs,ovr:pcfDeriveOvr(pos,attrs,pcfDraft.archetypeId)};
+}
+function pcfCreateSelf(name,startType,archetypeId,legendId,personality,nat){
+  const{pos,attrs}=pcfRollAttrs(startType,archetypeId,legendId);
+  const ovr=pcfDeriveOvr(pos,attrs,archetypeId);
+  const age=startType==='base'?16+Math.floor(Math.random()*3):18+Math.floor(Math.random()*4);
+  return{
+    id:'pcf_self_'+Date.now(),
+    name,pos,age,ovr,attrs,
+    archetypeId:legendId?null:archetypeId,
+    legendId:legendId||null,
+    personality,nationality:nat,
+    fatigue:0,moral:65,
+    seasonGoals:0,seasonAssists:0,
+    ovrHistory:[{season:0,ovr}],
+  };
+}
+function pcfSubmitCreate(){
+  if(!pcfDraft.name||!pcfDraft.name.trim()){
+    pcfDraft.__error='Digite um nome pro seu jogador.';
+    renderPCFull();
+    return;
+  }
+  playerCareerFull=freshPCFState();
+  playerCareerFull.difficulty=pendingPCFDifficulty;
+  playerCareerFull.self=pcfCreateSelf(pcfDraft.name.trim(),pcfDraft.startType,pcfDraft.archetypeId,pcfDraft.legendId,pcfDraft.personality,pcfDraft.nat);
+  playerCareerFull.phase='created';
+  renderPCFull();
+}
+
+function renderPCFSetup(){
+  const archetypeCards=PCF_ARCHETYPES.map(a=>`<div class="style-card ${pcfDraft.archetypeId===a.id?'active':''}" onclick="pcfSetDraft('archetypeId','${a.id}')">
+    <div class="style-head"><span class="style-name">${a.icon} ${a.name}</span></div>
+    <div class="style-desc">${POS_FULL_NAME[a.pos]} · ${a.tag} · avaliado por ${a.metricLabel}</div>
+  </div>`).join('');
+  const legendCards=LEGEND_ARCHETYPES.map(l=>`<div class="style-card ${pcfDraft.legendId===l.id?'active':''}" onclick="pcfSetDraft('legendId','${pcfDraft.legendId===l.id?'':l.id}')">
+    <div class="style-head"><span class="style-name">${l.name}</span></div>
+    <div class="style-desc">${POS_FULL_NAME[l.pos]} · ${l.tag}</div>
+  </div>`).join('');
+  const personalityCards=PCF_PERSONALITIES.map(p=>`<div class="style-card ${pcfDraft.personality===p.id?'active':''}" onclick="pcfSetDraft('personality','${p.id}')">
+    <div class="style-head"><span class="style-name">${p.label}</span></div>
+    <div class="style-desc">${p.desc}</div>
+  </div>`).join('');
+  const startOptions=PC_START_OPTIONS.map(o=>`<div class="style-card ${pcfDraft.startType===o.id?'active':''}" onclick="pcfSetDraft('startType','${o.id}')">
+    <div class="style-head"><span class="style-name">${o.label}</span></div>
+    <div class="style-desc">${o.desc}</div>
+  </div>`).join('');
+  const natOptions=Object.keys(NAME_POOLS).map(k=>`<div class="f-pill ${pcfDraft.nat===k?'active':''}" onclick="pcfSetDraft('nat','${k}')">${NAT_FLAG[k]||'🌍'} ${k==='generic'?'Outro país':k.toUpperCase()}</div>`).join('');
+  const preview=pcfPreviewSelf();
+  const previewArchetype=PCF_ARCHETYPES.find(a=>a.id===pcfDraft.archetypeId);
+  const catAvg=(list)=>Math.round(list.reduce((s,k)=>s+preview.attrs[k],0)/list.length);
+  const previewCats=`<div class="strength-readout" style="margin-bottom:16px;display:flex;gap:16px;flex-wrap:wrap">
+    <div><div class="strength-label">Overall</div><div class="strength-value">≈${preview.ovr}</div></div>
+    <div><div class="strength-label">Técnica</div><div class="strength-value">≈${catAvg(pcfTechAttrsFor(preview.pos))}</div></div>
+    <div><div class="strength-label">Físico</div><div class="strength-value">≈${catAvg(PCF_FISICO_ATTRS)}</div></div>
+    <div><div class="strength-label">Mental</div><div class="strength-value">≈${catAvg(PCF_MENTAL_ATTRS)}</div></div>
+  </div>`;
+  const errorHtml=pcfDraft.__error?`<div style="color:var(--danger);font-size:.8rem;margin-bottom:12px">${pcfDraft.__error}</div>`:'';
+  return`<div>
+    <div class="section-eyebrow" style="margin-bottom:6px">Trajetória Completa</div>
+    <h2 style="font-size:1.4rem;font-weight:900;letter-spacing:-.02em;margin-bottom:8px">Uma carreira pra viver devagar.</h2>
+    <p style="font-size:.88rem;color:var(--muted);margin-bottom:24px;max-width:640px">Diferente da Carreira de Jogador — aqui a evolução é lenta, cada escolha pesa, e a história é feita pra ser vivida uma vez com profundidade, não repetida em série.</p>
+
+    <div class="section-title" style="margin-bottom:8px">Dificuldade</div>
+    ${renderPCFDifficultyPicker()}
+
+    <div class="section-title" style="margin:20px 0 8px">Nome</div>
+    <input class="cf-search" style="margin-bottom:16px" type="text" placeholder="Nome do jogador" value="${pcfDraft.name}" oninput="pcfSetDraft('name',this.value)">
+
+    <div class="section-title" style="margin-bottom:8px">Arquétipo — escolha sua posição e seu estilo</div>
+    <p style="font-size:.8rem;color:var(--muted);margin-bottom:10px">Todo arquétipo tem carreira viável — um volante que desarma bem vale tanto quanto um atacante que faz gol. A avaliação ao longo da carreira segue a métrica certa pra cada um.</p>
+    <div class="style-grid" style="margin-bottom:16px">${archetypeCards}</div>
+
+    <div class="section-title" style="margin-bottom:8px">Ou roube atributos de uma lenda (opcional)</div>
+    <p style="font-size:.8rem;color:var(--muted);margin-bottom:10px">Mesmo toque nostálgico da Carreira de Jogador — escolher uma lenda define a posição automaticamente e substitui o arquétipo.</p>
+    <div class="style-grid" style="margin-bottom:16px">${legendCards}</div>
+
+    <div class="section-title" style="margin-bottom:8px">Personalidade</div>
+    <div class="style-grid" style="margin-bottom:16px">${personalityCards}</div>
+
+    <div class="section-title" style="margin-bottom:8px">Ponto de partida</div>
+    <div class="style-grid" style="margin-bottom:16px">${startOptions}</div>
+
+    <div class="section-title" style="margin-bottom:8px">Nacionalidade</div>
+    <div class="cf-row" style="margin-bottom:16px">${natOptions}</div>
+
+    ${previewCats}
+    ${errorHtml}
+    <button class="btn-primary" onclick="pcfSubmitCreate()">Começar trajetória →</button>
+  </div>`;
+}
+
+function renderPCFProfile(){
+  const p=playerCareerFull.self;
+  const archetype=p.archetypeId?PCF_ARCHETYPES.find(a=>a.id===p.archetypeId):null;
+  const legend=p.legendId?LEGEND_ARCHETYPES.find(l=>l.id===p.legendId):null;
+  const personality=PCF_PERSONALITIES.find(x=>x.id===p.personality);
+  const attrRow=(list)=>list.map(k=>`<div class="pj-strip"><span class="pj-strip-round">${PCF_ATTR_LABELS[k]}</span><span class="pj-strip-score">${p.attrs[k]}</span></div>`).join('');
+  return`<div>
+    <div class="section-eyebrow" style="margin-bottom:6px">Trajetória Completa</div>
+    <h2 style="font-size:1.4rem;font-weight:900;letter-spacing:-.02em;margin-bottom:4px">${NAT_FLAG[p.nationality]||'🌍'} ${p.name}</h2>
+    <p style="font-size:.88rem;color:var(--muted);margin-bottom:20px">${POS_FULL_NAME[p.pos]} · ${archetype?archetype.name:(legend?legend.name+' (lenda)':'')} · ${personality?personality.label:''} · ${p.age} anos · Overall ${p.ovr}</p>
+
+    <div class="section-title" style="margin-bottom:8px">Técnica</div>
+    <div style="margin-bottom:16px">${attrRow(pcfTechAttrsFor(p.pos))}</div>
+    <div class="section-title" style="margin-bottom:8px">Físico</div>
+    <div style="margin-bottom:16px">${attrRow(PCF_FISICO_ATTRS)}</div>
+    <div class="section-title" style="margin-bottom:8px">Mental</div>
+    <div style="margin-bottom:16px">${attrRow(PCF_MENTAL_ATTRS)}</div>
+
+    <div class="squad-hint" style="margin-top:8px">🚧 Checkpoint 2 completo: criação com atributos por categoria e arquétipos. Próxima etapa: motor de temporada (reaproveitando o mesmo motor de partida já existente) e a curva de evolução justa por posição.</div>
+    <button class="btn-secondary" style="margin-top:16px" onclick="playerCareerFull=freshPCFState();renderPCFull();">← Recomeçar criação</button>
+  </div>`;
+}
+
+function renderPCFull(){
+  const root=document.getElementById('trajetoria-root');
+  if(!root)return;
+  root.innerHTML=playerCareerFull.phase==='setup'?renderPCFSetup():renderPCFProfile();
+}
+
+// ══════════════════════════════════════════════════════════════════
 // TOP 30 — RANKING GLOBAL (Modo Carreira técnico, único modo que
 // participa por enquanto, pedido explícito do Lohan). Login e leitura/
 // escrita no Firestore rodam num <script type="module"> separado no fim
@@ -9640,6 +9960,17 @@ function setLeaderboardMode(mode){
   leaderboardMode=mode;
   renderLeaderboardScreen();
 }
+const LB_MEDALS={1:'🥇',2:'🥈',3:'🥉'};
+function lbRowHtml(i,mine,name,sub,statsHtml,grade){
+  const rank=i+1;
+  const top3=rank<=3;
+  return`<div class="lb-row ${top3?'lb-top3':''} ${mine?'mine':''}">
+    <div class="lb-rank">${LB_MEDALS[rank]||rank}</div>
+    <div class="lb-id"><div class="lb-name">${name}</div><div class="lb-sub">${sub}</div></div>
+    <div class="lb-stats">${statsHtml}</div>
+    <div class="lb-grade">${grade}</div>
+  </div>`;
+}
 function renderLeaderboardScreen(){
   const root=document.getElementById('leaderboard-root');
   if(!root)return;
@@ -9685,13 +10016,11 @@ function renderLeaderboardScreen(){
     else if(leaderboardError){listHtml='<div class="squad-hint">Não consegui carregar o ranking agora. <button class="btn-secondary" style="margin-top:8px" onclick="retryLeaderboardLoad()">Tentar de novo</button></div>';}
     else if(!leaderboardRows||!leaderboardRows.length){listHtml='<div class="squad-hint">Ninguém no Top 30 ainda — termine uma carreira no Modo Carreira e seja o primeiro!</div>';}
     else{
-      listHtml=leaderboardRows.map(function(r,i){
+      listHtml=`<div class="lb-list">${leaderboardRows.map(function(r,i){
         const mine=window.fbUser&&r.uid===window.fbUser.uid;
-        return`<div class="history-item" style="${mine?'border-color:var(--accent);border-width:2px':''}">
-          <span class="hi-season">#${i+1}</span>
-          <span class="hi-record">${escapeHtml(r.username)} · ${escapeHtml(r.clubName)} · ${escapeHtml(r.grade)} · ${Number(r.titles)||0} título(s) · ${Number(r.goals)||0} gols</span>
-        </div>`;
-      }).join('');
+        const stats=`<span>🏆 ${Number(r.titles)||0}</span><span>⚽ ${Number(r.goals)||0}</span>`;
+        return lbRowHtml(i,mine,escapeHtml(r.username),escapeHtml(r.clubName),stats,escapeHtml(r.grade));
+      }).join('')}</div>`;
     }
   } else {
     description='Ranking por nota da campanha, prêmios individuais do torneio e gols do artilheiro somados.';
@@ -9713,13 +10042,11 @@ function renderLeaderboardScreen(){
     else if(wcLeaderboardError){listHtml='<div class="squad-hint">Não consegui carregar o ranking agora. <button class="btn-secondary" style="margin-top:8px" onclick="retryWCLeaderboardLoad()">Tentar de novo</button></div>';}
     else if(!wcLeaderboardRows||!wcLeaderboardRows.length){listHtml='<div class="squad-hint">Ninguém no Top 30 da Copa ainda — termine um torneio e seja o primeiro!</div>';}
     else{
-      listHtml=wcLeaderboardRows.map(function(r,i){
+      listHtml=`<div class="lb-list">${wcLeaderboardRows.map(function(r,i){
         const mine=window.fbUser&&r.uid===window.fbUser.uid;
-        return`<div class="history-item" style="${mine?'border-color:var(--accent);border-width:2px':''}">
-          <span class="hi-season">#${i+1}</span>
-          <span class="hi-record">${escapeHtml(r.username)} · ${escapeHtml(r.nation)} · ${escapeHtml(r.grade)} · ${Number(r.awards)||0} prêmio(s) · ${Number(r.goals)||0} gols</span>
-        </div>`;
-      }).join('');
+        const stats=`<span>🏅 ${Number(r.awards)||0}</span><span>⚽ ${Number(r.goals)||0}</span>`;
+        return lbRowHtml(i,mine,escapeHtml(r.username),escapeHtml(r.nation),stats,escapeHtml(r.grade));
+      }).join('')}</div>`;
     }
   }
 
