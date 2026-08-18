@@ -1318,6 +1318,13 @@ function renderAchievementsScreen(){
 // Cada atualização real do site vira uma entrada aqui. A versão mais nova
 // (topo do array) é a que decide se o painel abre sozinho pra quem já visitou.
 const CHANGELOG=[
+  {version:'1.44',title:'Trajetória Completa já é jogável (temporada 1)',items:[
+    'A Trajetória Completa ganhou motor de temporada de verdade: calendário, partidas, minutos, fadiga e lesão — reaproveitando o mesmo motor da Carreira de Jogador.',
+    'Evolução justa por posição: cada arquétipo evolui pela métrica certa (gols pro Finalizador, desarmes pro Volante, defesas pro Goleiro) — nunca a mesma régua pra todo mundo.',
+    'Decisão de Cuidar do Corpo chegou nesse modo também, com efeito real na fadiga e no risco de lesão a longo prazo.',
+    'Grandes momentos registrados: primeiro gol, primeira assistência e hat-trick da carreira aparecem na Linha do Tempo.',
+    'Ainda preview: reputação em tempo real, propostas de transferência e relação com o técnico chegam na próxima leva.',
+  ]},
   {version:'1.43',title:'Top 30 com mais vida + prévia da Trajetória Completa',items:[
     'Visual novo do Top 30: medalha nos 3 primeiros colocados, nome em destaque, clube/seleção como subtítulo, troféus e gols como selos e a nota em grande à direita — muito mais vivo que a lista de texto corrido de antes.',
     'Prévia: novo modo "Trajetória Completa" na barra lateral — uma carreira de jogador bem mais profunda que a Carreira de Jogador de hoje, com atributos por categoria (técnica, físico, mental) e arquétipos por posição. Ainda em construção — a criação do jogador já funciona, o motor de temporada vem na sequência.',
@@ -9561,9 +9568,17 @@ function activePCFDifficulty(){
 }
 
 function freshPCFState(){
-  return{ phase:'setup', difficulty:pendingPCFDifficulty, self:null, club:null, season:0 };
+  return{
+    phase:'setup', difficulty:pendingPCFDifficulty, self:null, club:null,
+    season:0, matchday:0, schedule:null, matchLog:[],
+    pendingBodyCare:false, lastBodyCareMatchday:0, chronicRisk:0,
+    history:[], timeline:[],
+  };
 }
 let playerCareerFull=freshPCFState();
+function pcfPushTimeline(icon,text,type){
+  playerCareerFull.timeline.push({season:playerCareerFull.season,icon,text,type});
+}
 
 function renderPCFDifficultyPicker(){
   return`<div class="style-grid" style="margin-bottom:8px">${PCF_DIFFICULTY_LEVELS.map(d=>`<div class="style-card ${d.id===pendingPCFDifficulty?'active':''}" onclick="setPendingPCFDifficulty('${d.id}')">
@@ -9592,14 +9607,18 @@ function pcfTechAttrsFor(pos){ return pos==='GL'?PCF_TECH_ATTRS_GK:PCF_TECH_ATTR
 // ── ARQUÉTIPOS POR POSIÇÃO (pedido 1.2) — todos viáveis, cada um com
 // 3 atributos-assinatura que pesam mais na evolução/avaliação (item 5:
 // nunca julgar goleiro ou zagueiro pela régua de artilheiro).
+// statType decide qual régua de desempenho usar em campo (item 5: "nunca
+// julgar todo mundo pela mesma régua") — attack conta gols/assistências,
+// defense conta desarmes (independente do time ter marcado ou não),
+// gk conta defesas e jogos sem sofrer gol.
 const PCF_ARCHETYPES=[
-  {id:'finalizador',name:'O Finalizador',pos:'CA',icon:'⚽',tag:'especialista em gol',signature:['finalizacao','cabeceio','compostura'],metricLabel:'gols'},
-  {id:'armador',name:'O Armador',pos:'MC',icon:'🎯',tag:'assistências e visão de jogo',signature:['passe','visaoDeJogo','controle'],metricLabel:'assistências'},
-  {id:'driblador',name:'O Driblador',pos:'AE',icon:'⚡',tag:'criação via drible',signature:['drible','agilidade','aceleracao'],metricLabel:'dribles certos'},
-  {id:'motor',name:'O Motor',pos:'VL',icon:'🔋',tag:'box-to-box, cobre o campo inteiro',signature:['resistencia','tomadaDeDecisao','forca'],metricLabel:'participação (ataque+defesa)'},
-  {id:'volante',name:'O Volante',pos:'VL',icon:'🛡️',tag:'marca e constrói',signature:['posicionamento','forca','concentracao'],metricLabel:'desarmes/interceptações'},
-  {id:'defensor',name:'O Defensor',pos:'ZD',icon:'🧱',tag:'a parede da zaga',signature:['posicionamento','forca','cabeceio'],metricLabel:'desarmes/jogos sem sofrer gol'},
-  {id:'goleiro',name:'O Goleiro',pos:'GL',icon:'🧤',tag:'a última linha',signature:['reflexos','posicionamentoGol','concentracao'],metricLabel:'defesas/jogos sem sofrer gol'},
+  {id:'finalizador',name:'O Finalizador',pos:'CA',icon:'⚽',tag:'especialista em gol',signature:['finalizacao','cabeceio','compostura'],metricLabel:'gols',statType:'attack'},
+  {id:'armador',name:'O Armador',pos:'MC',icon:'🎯',tag:'assistências e visão de jogo',signature:['passe','visaoDeJogo','controle'],metricLabel:'assistências',statType:'attack'},
+  {id:'driblador',name:'O Driblador',pos:'AE',icon:'⚡',tag:'criação via drible',signature:['drible','agilidade','aceleracao'],metricLabel:'dribles certos',statType:'attack'},
+  {id:'motor',name:'O Motor',pos:'VL',icon:'🔋',tag:'box-to-box, cobre o campo inteiro',signature:['resistencia','tomadaDeDecisao','forca'],metricLabel:'participação (ataque+defesa)',statType:'attack'},
+  {id:'volante',name:'O Volante',pos:'VL',icon:'🛡️',tag:'marca e constrói',signature:['posicionamento','forca','concentracao'],metricLabel:'desarmes/interceptações',statType:'defense'},
+  {id:'defensor',name:'O Defensor',pos:'ZD',icon:'🧱',tag:'a parede da zaga',signature:['posicionamento','forca','cabeceio'],metricLabel:'desarmes/jogos sem sofrer gol',statType:'defense'},
+  {id:'goleiro',name:'O Goleiro',pos:'GL',icon:'🧤',tag:'a última linha',signature:['reflexos','posicionamentoGol','concentracao'],metricLabel:'defesas/jogos sem sofrer gol',statType:'gk'},
 ];
 
 // ── PERSONALIDADE (pedido 1.3) — ainda não wireada em nenhuma decisão
@@ -9687,14 +9706,17 @@ function pcfCreateSelf(name,startType,archetypeId,legendId,personality,nat){
   const{pos,attrs}=pcfRollAttrs(startType,archetypeId,legendId);
   const ovr=pcfDeriveOvr(pos,attrs,archetypeId);
   const age=startType==='base'?16+Math.floor(Math.random()*3):18+Math.floor(Math.random()*4);
+  const legend=legendId?LEGEND_ARCHETYPES.find(l=>l.id===legendId):null;
+  const headroom=(startType==='base'?26:16)+Math.floor(Math.random()*11)+(legend?legend.potBonus:0);
+  const pot=clamp(ovr+headroom,ovr,96);
   return{
     id:'pcf_self_'+Date.now(),
-    name,pos,age,ovr,attrs,
+    name,pos,age,ovr,pot,attrs,
     archetypeId:legendId?null:archetypeId,
     legendId:legendId||null,
     personality,nationality:nat,
-    fatigue:0,moral:65,
-    seasonGoals:0,seasonAssists:0,
+    fatigue:0,moral:65,injuredUntilMatchday:null,injurySeverity:null,
+    seasonGames:0,seasonGoals:0,seasonAssists:0,seasonTackles:0,seasonSaves:0,seasonCleanSheets:0,
     ovrHistory:[{season:0,ovr}],
   };
 }
@@ -9707,7 +9729,10 @@ function pcfSubmitCreate(){
   playerCareerFull=freshPCFState();
   playerCareerFull.difficulty=pendingPCFDifficulty;
   playerCareerFull.self=pcfCreateSelf(pcfDraft.name.trim(),pcfDraft.startType,pcfDraft.archetypeId,pcfDraft.legendId,pcfDraft.personality,pcfDraft.nat);
-  playerCareerFull.phase='created';
+  playerCareerFull.club=pcPickStartClub(pcfDraft.startType);
+  playerCareerFull.season=1;
+  pcfPushTimeline('🎬',`${playerCareerFull.self.name} inicia a trajetória no ${playerCareerFull.club.n}.`,'neutral');
+  pcfBeginSeason();
   renderPCFull();
 }
 
@@ -9773,33 +9798,353 @@ function renderPCFSetup(){
   </div>`;
 }
 
-function renderPCFProfile(){
-  const p=playerCareerFull.self;
-  const archetype=p.archetypeId?PCF_ARCHETYPES.find(a=>a.id===p.archetypeId):null;
-  const legend=p.legendId?LEGEND_ARCHETYPES.find(l=>l.id===p.legendId):null;
-  const personality=PCF_PERSONALITIES.find(x=>x.id===p.personality);
-  const attrRow=(list)=>list.map(k=>`<div class="pj-strip"><span class="pj-strip-round">${PCF_ATTR_LABELS[k]}</span><span class="pj-strip-score">${p.attrs[k]}</span></div>`).join('');
-  return`<div>
-    <div class="section-eyebrow" style="margin-bottom:6px">Trajetória Completa</div>
-    <h2 style="font-size:1.4rem;font-weight:900;letter-spacing:-.02em;margin-bottom:4px">${NAT_FLAG[p.nationality]||'🌍'} ${p.name}</h2>
-    <p style="font-size:.88rem;color:var(--muted);margin-bottom:20px">${POS_FULL_NAME[p.pos]} · ${archetype?archetype.name:(legend?legend.name+' (lenda)':'')} · ${personality?personality.label:''} · ${p.age} anos · Overall ${p.ovr}</p>
-
-    <div class="section-title" style="margin-bottom:8px">Técnica</div>
-    <div style="margin-bottom:16px">${attrRow(pcfTechAttrsFor(p.pos))}</div>
-    <div class="section-title" style="margin-bottom:8px">Físico</div>
-    <div style="margin-bottom:16px">${attrRow(PCF_FISICO_ATTRS)}</div>
-    <div class="section-title" style="margin-bottom:8px">Mental</div>
-    <div style="margin-bottom:16px">${attrRow(PCF_MENTAL_ATTRS)}</div>
-
-    <div class="squad-hint" style="margin-top:8px">🚧 Checkpoint 2 completo: criação com atributos por categoria e arquétipos. Próxima etapa: motor de temporada (reaproveitando o mesmo motor de partida já existente) e a curva de evolução justa por posição.</div>
-    <button class="btn-secondary" style="margin-top:16px" onclick="playerCareerFull=freshPCFState();renderPCFull();">← Recomeçar criação</button>
-  </div>`;
+function savePCFState(){
+  try{localStorage.setItem(PCF_SAVE_KEY,JSON.stringify(playerCareerFull));}catch(e){}
 }
 
+// ── TEMPORADA — reaproveita a MESMA infra do motor de partida (pedido 6):
+// generateRoundRobinSchedule, singleMatch, weightedPickByOvr, POS_PEAK/
+// POS_DECLINE_RATE, INJURY_SEVERITY/rollInjuryDuration, pcPickStartClub
+// (genérico, não específico da Carreira de Jogador leve — reaproveitado
+// direto, sem cópia). Nada disso foi tocado nem duplicado.
+function pcfBeginSeason(){
+  const c=playerCareerFull.club;
+  const teamNames=[c.n,...c.teams.map(t=>t.n)];
+  playerCareerFull.schedule=generateRoundRobinSchedule(teamNames);
+  playerCareerFull.matchday=0;
+  playerCareerFull.matchLog=[];
+  playerCareerFull.phase='active';
+  const p=playerCareerFull.self;
+  p.seasonGames=0;p.seasonGoals=0;p.seasonAssists=0;p.seasonTackles=0;p.seasonSaves=0;p.seasonCleanSheets=0;
+  playerCareerFull.lastBodyCareMatchday=0;
+}
+function pcfMatchdayFixture(){
+  if(!playerCareerFull.schedule||playerCareerFull.matchday>=playerCareerFull.schedule.length)return null;
+  const round=playerCareerFull.schedule[playerCareerFull.matchday];
+  return round.find(fx=>fx.home===playerCareerFull.club.n||fx.away===playerCareerFull.club.n)||null;
+}
+function isPCFInjured(){
+  const p=playerCareerFull.self;
+  return !!(p.injuredUntilMatchday&&playerCareerFull.matchday<p.injuredUntilMatchday);
+}
+function pcfSelectionChance(){
+  const c=playerCareerFull.club,p=playerCareerFull.self;
+  if(isPCFInjured())return 0;
+  return clamp(0.42+(p.ovr-c.str)/70,0.16,0.97);
+}
+function pcfRollMinutes(){
+  if(Math.random()<0.5)return 90;
+  return 15+Math.floor(Math.random()*46);
+}
+const PCF_FINISHER_POS=['CA','AE','AD','MC'];
+// Régua certa por statType (pedido 5) — ataque conta gol/assistência
+// (mesmo motor de weightedPickByOvr contra companheiros virtuais da
+// Carreira de Jogador leve), defesa conta desarmes (não depende do time
+// ter marcado), goleiro conta defesas + jogo sem sofrer gol. O motor de
+// partida não gera eventos de chute/desarme de verdade — essa é uma
+// aproximação honesta a partir do placar agregado + atributos, não uma
+// simulação de eventos por minuto.
+function pcfPersonalContribution(minutes,teamGoals,teamGoalsAgainst){
+  const p=playerCareerFull.self;
+  const archetype=PCF_ARCHETYPES.find(a=>a.id===p.archetypeId);
+  const statType=archetype?archetype.statType:'attack';
+  const result={goals:0,assists:0,tackles:0,saves:0,cleanSheet:false};
+  if(minutes<=0)return result;
+  if(statType==='attack'){
+    if(teamGoals>0){
+      const isFinisher=PCF_FINISHER_POS.includes(p.pos);
+      const virtualTeammates=Array.from({length:isFinisher?3:5},()=>({ovr:clamp(playerCareerFull.club.str+(Math.random()*14-7),35,90)}));
+      const pool=[{__self:true,ovr:p.ovr},...virtualTeammates];
+      for(let i=0;i<teamGoals;i++){
+        if(Math.random()>minutes/90)continue;
+        const scorer=weightedPickByOvr(pool);
+        if(scorer&&scorer.__self){result.goals++;continue;}
+        if(Math.random()<0.3){
+          const assister=weightedPickByOvr(pool);
+          if(assister&&assister.__self)result.assists++;
+        }
+      }
+    }
+  } else if(statType==='defense'){
+    const skill=(p.attrs.posicionamento+p.attrs.forca)/2;
+    result.tackles=Math.round((skill/100)*(minutes/90)*(2+Math.random()*4));
+    if(teamGoalsAgainst===0&&minutes>=60)result.cleanSheet=true;
+  } else if(statType==='gk'){
+    const shotsProxy=teamGoalsAgainst+1+Math.floor(Math.random()*3);
+    result.saves=Math.max(teamGoalsAgainst,Math.round((p.attrs.reflexos/100)*shotsProxy*(minutes/90)));
+    if(teamGoalsAgainst===0&&minutes>=60)result.cleanSheet=true;
+  }
+  return result;
+}
+function pcfApplyFatigue(minutes){
+  const p=playerCareerFull.self;
+  const mult=activePCFDifficulty().injuryMult;
+  p.fatigue=clamp(p.fatigue+(minutes/90)*13*mult,0,100);
+}
+function pcfCheckInjury(){
+  const p=playerCareerFull.self;
+  const mult=activePCFDifficulty().injuryMult;
+  const fatigueRisk=Math.max(0,(p.fatigue-50)/50);
+  const ageRisk=p.age>=31?0.012:p.age>=27?0.005:0;
+  const chronicFactor=(playerCareerFull.chronicRisk||0)/100*0.02;
+  const chance=(0.01+fatigueRisk*0.03+ageRisk+chronicFactor)*mult;
+  if(Math.random()<chance){
+    const inj=rollInjuryDuration();
+    p.injuredUntilMatchday=playerCareerFull.matchday+1+inj.matchdays;
+    p.injurySeverity=inj.label;
+    pcfPushTimeline('🩹',`Lesão (${inj.label}) — desfalca por ${inj.matchdays} rodada(s).`,'negative');
+  }
+}
+function pcfMaybeTriggerBodyCare(){
+  if(playerCareerFull.matchday-playerCareerFull.lastBodyCareMatchday>=4)playerCareerFull.pendingBodyCare=true;
+}
+// Grandes momentos (pedido 4) — só os que dá pra contar honestamente com
+// o placar agregado que esse motor produz (sem minuto exato de gol,
+// diferente do motor de partida minuto a minuto do Modo Técnico):
+// primeiro gol, primeira assistência, primeiro hat-trick da carreira.
+function pcfCheckMilestones(c,fx,hg,ag,isHome){
+  if(!playerCareerFull.milestones)playerCareerFull.milestones={goal:false,assist:false,hatTrick:false};
+  const ms=playerCareerFull.milestones;
+  const opponent=isHome?fx.away:fx.home;
+  if(!ms.goal&&c.goals>0){
+    ms.goal=true;
+    pcfPushTimeline('⚽',`Primeiro gol da carreira! Temporada ${playerCareerFull.season}, rodada ${playerCareerFull.matchday+1}, contra o ${opponent} (${playerCareerFull.club.n} ${hg}×${ag}).`,'positive');
+  }
+  if(!ms.assist&&c.assists>0){
+    ms.assist=true;
+    pcfPushTimeline('🅰️',`Primeira assistência da carreira! Temporada ${playerCareerFull.season}, rodada ${playerCareerFull.matchday+1}, contra o ${opponent}.`,'positive');
+  }
+  if(!ms.hatTrick&&c.goals>=3){
+    ms.hatTrick=true;
+    pcfPushTimeline('🎩',`Hat-trick! ${c.goals} gols numa partida só, contra o ${opponent}.`,'positive');
+  }
+}
+function resolvePCFMatchday(){
+  const fx=pcfMatchdayFixture();
+  if(!fx){playerCareerFull.matchday++;return;}
+  const p=playerCareerFull.self,c=playerCareerFull.club;
+  const isHome=fx.home===c.n;
+  const myLiveStr=clamp(p.ovr*0.55+c.str*0.45,30,99);
+  const rivalStr=t=>{const r=c.teams.find(x=>x.n===t);return r?r.str:c.str;};
+  const homeStr=isHome?myLiveStr:rivalStr(fx.home);
+  const awayStr=isHome?rivalStr(fx.away):myLiveStr;
+  const{hg,ag}=singleMatch(homeStr+5,awayStr);
+  const myClubGoals=isHome?hg:ag;
+  const myClubConceded=isHome?ag:hg;
+  const selected=Math.random()<pcfSelectionChance();
+  const minutes=selected?pcfRollMinutes():0;
+  let contribution={goals:0,assists:0,tackles:0,saves:0,cleanSheet:false};
+  if(selected&&minutes>0){
+    contribution=pcfPersonalContribution(minutes,myClubGoals,myClubConceded);
+    p.seasonGames++;p.seasonGoals+=contribution.goals;p.seasonAssists+=contribution.assists;
+    p.seasonTackles+=contribution.tackles;p.seasonSaves+=contribution.saves;
+    if(contribution.cleanSheet)p.seasonCleanSheets++;
+    pcfApplyFatigue(minutes);
+    pcfCheckInjury();
+    pcfCheckMilestones(contribution,fx,hg,ag,isHome);
+  }
+  playerCareerFull.matchLog.push({matchday:playerCareerFull.matchday+1,home:fx.home,away:fx.away,hg,ag,selected,minutes,myGoals:contribution.goals,myAssists:contribution.assists,myTackles:contribution.tackles,mySaves:contribution.saves});
+  playerCareerFull.matchday++;
+  pcfMaybeTriggerBodyCare();
+}
+function pcfAdvanceOneRound(){
+  if(playerCareerFull.pendingBodyCare)return;
+  if(!playerCareerFull.schedule||playerCareerFull.matchday>=playerCareerFull.schedule.length){pcfFinishSeason();savePCFState();renderPCFull();return;}
+  resolvePCFMatchday();
+  savePCFState();
+  renderPCFull();
+}
+function pcfSimulateRestOfSeason(){
+  let guard=0;
+  while(playerCareerFull.phase==='active'&&!playerCareerFull.pendingBodyCare&&guard<200){
+    if(!playerCareerFull.schedule||playerCareerFull.matchday>=playerCareerFull.schedule.length){pcfFinishSeason();break;}
+    resolvePCFMatchday();
+    guard++;
+  }
+  savePCFState();
+  renderPCFull();
+}
+function pcfApplyBodyCare(id){
+  const p=playerCareerFull.self;
+  if(id==='treino'){ p.fatigue=clamp(p.fatigue+8,0,100); playerCareerFull.chronicRisk=clamp(playerCareerFull.chronicRisk+3*activePCFDifficulty().injuryMult,0,100); playerCareerFull.trainingBoost=1; }
+  else if(id==='descanso'){ p.fatigue=clamp(p.fatigue-20,0,100); playerCareerFull.chronicRisk=clamp(playerCareerFull.chronicRisk-2,0,100); }
+  else if(id==='fisio'){ playerCareerFull.chronicRisk=clamp(playerCareerFull.chronicRisk-6,0,100); }
+  else { p.fatigue=clamp(p.fatigue-8,0,100); }
+  playerCareerFull.pendingBodyCare=false;
+  playerCareerFull.lastBodyCareMatchday=playerCareerFull.matchday;
+  savePCFState();
+  renderPCFull();
+}
+
+// ── EVOLUÇÃO JUSTA POR POSIÇÃO (pedido 5) ────────────
+// Aquecimento por número de temporada (T1 devagar, T2-3 ganhando espaço,
+// T4-5+ em diante depende do teto) × régua de desempenho certa pro
+// statType do arquétipo (nunca julga goleiro pela régua de artilheiro) ×
+// multiplicador de dificuldade (evoMult) — cresce mais nos 3 atributos-
+// assinatura do arquétipo. Zero alavanca de compra: só jogar bem gera
+// evolução (pedido explícito: "nunca pay-to-win").
+function pcfPerformanceFactor(p,archetype){
+  const statType=archetype?archetype.statType:'attack';
+  if(statType==='defense')return clamp(p.seasonTackles/40,0,1.5);
+  if(statType==='gk')return clamp(p.seasonSaves/60+p.seasonCleanSheets/10,0,1.5);
+  return clamp((p.seasonGoals+p.seasonAssists)/12,0,1.5);
+}
+function pcfEvolveAttrs(){
+  const p=playerCareerFull.self;
+  const archetype=PCF_ARCHETYPES.find(a=>a.id===p.archetypeId)||{signature:[]};
+  const diff=activePCFDifficulty();
+  const peak=POS_PEAK[p.pos]||27;
+  const seasonWarmup=playerCareerFull.season<=1?0.55:playerCareerFull.season<=3?0.8:1;
+  const perf=pcfPerformanceFactor(p,archetype);
+  const gamesFactor=clamp(p.seasonGames/28,0,1);
+  let baseDelta;
+  if(p.age<peak){
+    baseDelta=gamesFactor>0.3?(1+perf*2)*seasonWarmup:-0.2;
+  } else if(p.age<=peak+2){
+    baseDelta=(perf-0.4)*1.2;
+  } else {
+    const rate=POS_DECLINE_RATE[p.pos]||0.6;
+    baseDelta=-rate*(0.5+(p.age-peak-2)*0.12);
+  }
+  if(playerCareerFull.trainingBoost){baseDelta+=0.5*playerCareerFull.trainingBoost;playerCareerFull.trainingBoost=0;}
+  baseDelta*=diff.evoMult;
+  const allAttrs=[...pcfTechAttrsFor(p.pos),...PCF_FISICO_ATTRS,...PCF_MENTAL_ATTRS];
+  allAttrs.forEach(k=>{
+    const isSignature=archetype.signature.includes(k);
+    const delta=baseDelta*(isSignature?1.4:0.7)*(0.85+Math.random()*0.3);
+    p.attrs[k]=clamp(Math.round(p.attrs[k]+delta),1,Math.min(90,p.pot));
+  });
+  const newOvr=pcfDeriveOvr(p.pos,p.attrs,p.archetypeId);
+  p.ovr=clamp(newOvr,40,Math.min(99,p.pot+2));
+  if(p.pot<p.ovr)p.pot=p.ovr;
+  p.ovrHistory.push({season:playerCareerFull.season,ovr:p.ovr});
+}
+function pcfFinishSeason(){
+  const p=playerCareerFull.self;
+  // pcfEvolveAttrs() PRIMEIRO — ovrEnd tem que refletir o overall JÁ COM a
+  // evolução da temporada aplicada, senão a tela de fim de temporada mostra
+  // um número que não bate com o cabeçalho (que já lê o overall ao vivo,
+  // pós-evolução) nem com ovrHistory.
+  pcfEvolveAttrs();
+  playerCareerFull.history.push({season:playerCareerFull.season,club:playerCareerFull.club.n,games:p.seasonGames,goals:p.seasonGoals,assists:p.seasonAssists,tackles:p.seasonTackles,saves:p.seasonSaves,cleanSheets:p.seasonCleanSheets,ovrEnd:p.ovr});
+  playerCareerFull.phase='seasonEnd';
+}
+function pcfContinueFromSeasonEnd(){
+  const p=playerCareerFull.self;
+  playerCareerFull.season++;
+  if(playerCareerFull.season>MAX_SEASONS){
+    playerCareerFull.phase='summary';
+  } else {
+    p.age++;
+    p.injuredUntilMatchday=null;p.injurySeverity=null;
+    p.fatigue=0;
+    pcfBeginSeason();
+  }
+  savePCFState();
+  renderPCFull();
+}
+
+// ── RENDER ────────────────────────────────────────────
+function pcfFormatContribution(c){
+  const parts=[];
+  if(c.goals)parts.push(`${c.goals}x⚽`);
+  if(c.assists)parts.push(`${c.assists}x🅰️`);
+  if(c.tackles)parts.push(`${c.tackles}x🛡️`);
+  if(c.saves)parts.push(`${c.saves}x🧤`);
+  return parts.join(' ');
+}
+function pcfRenderMatchTicker(){
+  if(!playerCareerFull.matchLog.length)return'<div style="color:var(--muted);font-size:.85rem;padding:12px 0">Nenhuma partida simulada ainda.</div>';
+  return[...playerCareerFull.matchLog].reverse().slice(0,15).map(m=>{
+    const isHome=m.home===playerCareerFull.club.n;
+    const outcome=isHome?(m.hg>m.ag?'win':m.hg===m.ag?'draw':'lose'):(m.ag>m.hg?'win':m.ag===m.hg?'draw':'lose');
+    const contribHtml=pcfFormatContribution({goals:m.myGoals,assists:m.myAssists,tackles:m.myTackles,saves:m.mySaves});
+    const statusTag=!m.selected?'<span class="pj-strip-tag">Não relacionado</span>':(m.minutes<90?`<span class="pj-strip-tag">${m.minutes}'</span>`:'');
+    return`<div class="pj-strip ${outcome}">
+      <span class="pj-strip-round">R${m.matchday}</span>
+      <span class="pj-strip-score">${m.home} ${m.hg} × ${m.ag} ${m.away}</span>
+      ${contribHtml?`<span class="pj-strip-contrib">${contribHtml}</span>`:''}
+      ${statusTag}
+    </div>`;
+  }).join('');
+}
+function pcfAttrRow(list){
+  const p=playerCareerFull.self;
+  return list.map(k=>`<div class="pj-strip"><span class="pj-strip-round">${PCF_ATTR_LABELS[k]}</span><span class="pj-strip-score">${p.attrs[k]}</span></div>`).join('');
+}
+function pcfRenderTimeline(){
+  if(!playerCareerFull.timeline.length)return'';
+  return`<div class="section-title" style="margin:20px 0 8px">Grandes momentos</div>
+  <div class="history-list">${[...playerCareerFull.timeline].reverse().map(t=>`<div class="history-item"><span class="hi-trophy">${t.icon}</span><span class="hi-record">${t.text}</span></div>`).join('')}</div>`;
+}
+function renderPCFBodyCare(){
+  const cards=BODY_CARE_OPTIONS.map(o=>`<div class="style-card" onclick="pcfApplyBodyCare('${o.id}')">
+    <div class="style-head"><span class="style-name">${o.icon} ${o.label}</span></div>
+    <div class="style-desc">${o.desc}</div>
+  </div>`).join('');
+  return`<div>
+    <div class="section-title" style="margin-bottom:8px">Cuidar do corpo</div>
+    <p style="font-size:.85rem;color:var(--muted);margin-bottom:16px">O preparador físico pergunta como você quer encarar essa janela de treino.</p>
+    <div class="style-grid">${cards}</div>
+  </div>`;
+}
+function renderPCFSeasonEnd(){
+  const p=playerCareerFull.self;
+  const archetype=PCF_ARCHETYPES.find(a=>a.id===p.archetypeId);
+  const statLine=archetype&&archetype.statType==='defense'?`${p.seasonTackles} desarmes`
+    :archetype&&archetype.statType==='gk'?`${p.seasonSaves} defesas, ${p.seasonCleanSheets} jogos sem sofrer gol`
+    :`${p.seasonGoals} gols, ${p.seasonAssists} assistências`;
+  return`<div>
+    <div class="section-title" style="margin-bottom:8px">Fim da Temporada ${playerCareerFull.season}</div>
+    <p style="font-size:.9rem;color:var(--text);margin-bottom:16px">${p.seasonGames} jogos · ${statLine} · Overall ${p.ovr}</p>
+    <button class="btn-primary" onclick="pcfContinueFromSeasonEnd()">Continuar →</button>
+  </div>`;
+}
+function renderPCFSummary(){
+  const p=playerCareerFull.self;
+  const totalGames=playerCareerFull.history.reduce((s,h)=>s+h.games,0);
+  return`<div>
+    <div class="section-title" style="margin-bottom:8px">Fim de Carreira</div>
+    <p style="font-size:.9rem;color:var(--text);margin-bottom:16px">${p.name} encerrou ${playerCareerFull.history.length} temporadas, ${totalGames} jogos, overall final ${p.ovr} (começou em ${p.ovrHistory[0].ovr}).</p>
+    ${pcfRenderTimeline()}
+    <button class="btn-secondary" style="margin-top:16px" onclick="playerCareerFull=freshPCFState();try{localStorage.removeItem(PCF_SAVE_KEY);}catch(e){}renderPCFull();">← Nova trajetória</button>
+  </div>`;
+}
+function renderPCFSeasonHub(){
+  const p=playerCareerFull.self,c=playerCareerFull.club;
+  const archetype=p.archetypeId?PCF_ARCHETYPES.find(a=>a.id===p.archetypeId):null;
+  const legend=p.legendId?LEGEND_ARCHETYPES.find(l=>l.id===p.legendId):null;
+  const headerHtml=`<div class="career-header">
+    <div class="ch-club">
+      <span class="ch-flag">${NAT_FLAG[p.nationality]||'🌍'}</span>
+      <div><div class="ch-name">${p.name}</div><div class="ch-league">${c.n} · ${archetype?archetype.name:(legend?legend.name:'')}</div></div>
+    </div>
+    <div class="ch-right">
+      <div class="ch-season">Temporada ${playerCareerFull.season} / ${MAX_SEASONS}</div>
+      <div class="ch-budget">Overall ${p.ovr}</div>
+    </div>
+  </div>`;
+  let body;
+  if(playerCareerFull.phase==='seasonEnd')body=renderPCFSeasonEnd();
+  else if(playerCareerFull.phase==='summary')body=renderPCFSummary();
+  else if(playerCareerFull.pendingBodyCare)body=renderPCFBodyCare();
+  else{
+    const injured=isPCFInjured();
+    body=`<div class="squad-hint" style="margin-bottom:12px">${injured?`🩹 Machucado (${p.injurySeverity}) — desfalca até a rodada ${p.injuredUntilMatchday}.`:`Fadiga: ${Math.round(p.fatigue)}%`}</div>
+      <button class="btn-primary" onclick="pcfAdvanceOneRound()">Próxima rodada →</button>
+      <button class="btn-secondary" style="margin-top:8px" onclick="pcfSimulateRestOfSeason()">Simular temporada inteira →</button>
+      <div class="section-title" style="margin:20px 0 8px">Últimas partidas</div>
+      ${pcfRenderMatchTicker()}
+      ${pcfRenderTimeline()}
+      <div class="section-title" style="margin:20px 0 8px">Atributos-assinatura</div>
+      <div>${pcfAttrRow(archetype?archetype.signature:pcfTechAttrsFor(p.pos).slice(0,3))}</div>`;
+  }
+  return headerHtml+body;
+}
 function renderPCFull(){
   const root=document.getElementById('trajetoria-root');
   if(!root)return;
-  root.innerHTML=playerCareerFull.phase==='setup'?renderPCFSetup():renderPCFProfile();
+  root.innerHTML=playerCareerFull.phase==='setup'?renderPCFSetup():renderPCFSeasonHub();
 }
 
 // ══════════════════════════════════════════════════════════════════
