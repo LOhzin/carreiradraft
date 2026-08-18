@@ -1318,6 +1318,10 @@ function renderAchievementsScreen(){
 // Cada atualização real do site vira uma entrada aqui. A versão mais nova
 // (topo do array) é a que decide se o painel abre sozinho pra quem já visitou.
 const CHANGELOG=[
+  {version:'1.45',title:'Trajetória Completa — menos brutal',items:[
+    'Recalibrado o quanto você joga na Trajetória Completa: "base de clube grande" tava dando só ~14% de participação numa temporada (a coisa toda parecia acabar do nada) — agora fica mais perto de 25-30%, ainda desafiador mas jogável de verdade.',
+    '"Profissional em clube pequeno" também ficou mais generoso, e a dificuldade escolhida agora pesa direto nas suas chances de jogar, não só na evolução e no risco de lesão.',
+  ]},
   {version:'1.44',title:'Trajetória Completa já é jogável (temporada 1)',items:[
     'A Trajetória Completa ganhou motor de temporada de verdade: calendário, partidas, minutos, fadiga e lesão — reaproveitando o mesmo motor da Carreira de Jogador.',
     'Evolução justa por posição: cada arquétipo evolui pela métrica certa (gols pro Finalizador, desarmes pro Volante, defesas pro Goleiro) — nunca a mesma régua pra todo mundo.',
@@ -9548,11 +9552,11 @@ const PCF_SAVE_KEY='carreiraDraftTrajetoriaSave';
 // nenhuma, só calibra o quanto elas pesam (pedido explícito: "as
 // mecânicas continuam ativas, só suavizadas").
 const PCF_DIFFICULTY_LEVELS=[
-  {id:'artilheiro_nato',label:'Artilheiro Nato',evoMult:1.35,injuryMult:0.7,repMult:1.4,consequenceMult:0.6,
+  {id:'artilheiro_nato',label:'Artilheiro Nato',evoMult:1.35,injuryMult:0.7,repMult:1.4,consequenceMult:0.6,selectionBonus:0.10,
     desc:'Foco em diversão e carreira de gols sem toda a complexidade. Curva de evolução mais generosa (menos temporadas de aquecimento antes de virar produtivo), risco de lesão reduzido nas escolhas de cuidado com o corpo, e reputação sobe mais rápido na escada em tempo real.'},
-  {id:'trajetoria_justa',label:'Trajetória Justa',evoMult:1,injuryMult:1,repMult:1,consequenceMult:1,
+  {id:'trajetoria_justa',label:'Trajetória Justa',evoMult:1,injuryMult:1,repMult:1,consequenceMult:1,selectionBonus:0,
     desc:'O padrão, sem ajuste artificial — equilíbrio real entre quem quer curtir a história e quem quer sentir o peso das escolhas.'},
-  {id:'osso_duro',label:'Osso Duro de Roer',evoMult:0.75,injuryMult:1.35,repMult:0.85,consequenceMult:1.5,
+  {id:'osso_duro',label:'Osso Duro de Roer',evoMult:0.75,injuryMult:1.35,repMult:0.85,consequenceMult:1.5,selectionBonus:-0.08,
     desc:'Evolução mais lenta e exigente, fadiga e risco de lesão mais punitivos, e as consequências de uma decisão ruim (empresário mal escolhido, recusa por lealdade) pesam de verdade na trajetória — sem rede de segurança.'},
 ];
 let pendingPCFDifficulty='trajetoria_justa';
@@ -9827,10 +9831,26 @@ function isPCFInjured(){
   const p=playerCareerFull.self;
   return !!(p.injuredUntilMatchday&&playerCareerFull.matchday<p.injuredUntilMatchday);
 }
+// Recalibrado — reclamação direta do Lohan jogando de verdade: "ta MUITO
+// dificil... a temporada ta acabando do nada". Com a fórmula original
+// (base 0.42, divisor /70, piso 0.16 — a MESMA já usada na Carreira de
+// Jogador leve), um jogador "base de clube grande" media ~5 jogos numa
+// temporada de ~36 rodadas (~14% de participação): sumia da tela por
+// tanto tempo que o fim de temporada parecia cair do nada. O que
+// funciona pro modo leve (carreira inteira em poucos minutos, fácil de
+// rejogar) não funciona igual pra Trajetória Completa (pedida pra ser
+// vivida devagar, com peso) — mesma régua, ritmo diferente, precisa de
+// calibração própria. Base mais alta (0.55), gap de força mais suave
+// (/110 em vez de /70) e piso mais alto (0.30) levam a média pro
+// caminho mais difícil pra ~11-13 jogos — continua desafiador (times
+// grandes ainda competem duro pela vaga), mas não mais silencia a
+// temporada inteira. selectionBonus da dificuldade ainda diferencia os
+// 3 níveis por cima disso.
 function pcfSelectionChance(){
   const c=playerCareerFull.club,p=playerCareerFull.self;
   if(isPCFInjured())return 0;
-  return clamp(0.42+(p.ovr-c.str)/70,0.16,0.97);
+  const bonus=activePCFDifficulty().selectionBonus||0;
+  return clamp(0.55+(p.ovr-c.str)/110+bonus,0.20,0.97);
 }
 function pcfRollMinutes(){
   if(Math.random()<0.5)return 90;
