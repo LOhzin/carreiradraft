@@ -33,12 +33,16 @@
 /* ===== Quadro Tático — identidade visual única (sem modo claro, de propósito: ================
    a metáfora é ardósia de vestiário, não teria sentido inverter pra um "modo claro genérico") */
 :root{
-  --bg:#10231A;--surface:#1B3328;--surface-2:#23402F;--border:#2E4A3B;
-  --text:#F2EFE6;--muted:#8FA396;
-  --accent:#C9A227;--accent-dim:#A3830F;--accent-light:#2A2410;
+  /* Cinza como cor principal (pedido explícito) — escala neutra levemente
+     quente (não cinza clínico/azulado), do quase-preto ao quase-branco.
+     Verde/vermelho continuam existindo só onde carregam SIGNIFICADO
+     (vitória/derrota, positivo/negativo) — não são decoração, são estado. */
+  --bg:#141413;--surface:#1C1B1A;--surface-2:#262524;--border:#3A3836;
+  --text:#F0EEEB;--muted:#93908C;
+  --accent:#D8D5CF;--accent-dim:#ADA9A2;--accent-light:#2E2C2A;
   --green:#7ED957;--danger:#C1443A;--danger-light:#2C1815;
   --r:4px;--r-lg:8px;--r-sm:3px;
-  --f-display:'Oswald','Arial Narrow',sans-serif;
+  --f-display:'IBM Plex Sans','Helvetica Neue',sans-serif;
   --f-mono:'JetBrains Mono',ui-monospace,'SF Mono',monospace;
 }
 
@@ -60,22 +64,36 @@ h1,h2,h3{font-family:var(--f-display);font-weight:700;font-variation-settings:'w
 .chalk-texture{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 .container{max-width:1100px;margin:0 auto;padding:0 24px}
 
-/* NAV */
-nav{position:sticky;top:0;z-index:100;background:var(--bg);border-bottom:1px solid var(--border)}
-.nav-inner{height:58px;display:flex;align-items:center;justify-content:space-between;gap:24px}
+/* SIDEBAR — pedido explícito: "tudo na lateral", como a plataforma da
+   Claude. Substitui a barra horizontal + os pills de aba centralizados
+   que existiam antes; libera a coluna principal pro conteúdo em vez de
+   ficar preso num container de 1100px sempre centralizado na tela. */
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:264px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:20px 14px;overflow-y:auto;z-index:100}
+.sidebar-logo{font-weight:900;font-size:1.05rem;letter-spacing:-.01em;padding:6px 10px 22px}
+.sidebar-logo em{color:var(--accent);font-style:normal}
 .logo{font-weight:900;font-size:1rem;letter-spacing:-.01em}
 .logo em{color:var(--accent);font-style:normal}
-.nav-links{display:flex;gap:24px;list-style:none}
-.nav-links a{font-size:.84rem;font-weight:500;color:var(--muted);transition:color .15s;cursor:pointer}
-.nav-links a:hover{color:var(--text)}
-.nav-btn{background:var(--text);color:var(--bg);padding:7px 16px;border-radius:var(--r-sm);font-size:.84rem;font-weight:600;transition:opacity .15s}
+.sidebar-nav{display:flex;flex-direction:column;gap:2px}
+.sidebar-nav .tab-btn{display:flex;align-items:center;gap:10px;justify-content:flex-start;text-align:left;width:100%;padding:10px 12px;border-radius:var(--r);font-size:.86rem;font-weight:600;color:var(--muted);background:none}
+.sidebar-nav .tab-btn:hover{background:var(--surface-2);color:var(--text)}
+.sidebar-nav .tab-btn.active{background:var(--accent-light);color:var(--text)}
+.sidebar-saves{margin-top:16px;padding-top:16px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:6px}
+.sidebar-saves-title{font-size:.66rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:0 12px 2px}
+.sidebar-save-item{display:block;width:100%;text-align:left;padding:8px 12px;border-radius:var(--r);background:none;color:var(--muted);font-size:.78rem}
+.sidebar-save-item:hover{background:var(--surface-2);color:var(--text)}
+.sidebar-save-item strong{display:block;color:var(--text);font-size:.82rem;font-weight:700;margin-bottom:1px}
+.sidebar-bottom{margin-top:auto;padding-top:16px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:10px}
+.sidebar-link-external{font-size:.82rem;font-weight:500;color:var(--muted);padding:6px 12px;transition:color .15s}
+.sidebar-link-external:hover{color:var(--text)}
+.sidebar-credits{padding:6px 12px 0}
+.nav-btn{background:var(--text);color:var(--bg);padding:7px 16px;border-radius:var(--r-sm);font-size:.84rem;font-weight:600;transition:opacity .15s;width:100%;text-align:center}
 .nav-btn:hover{opacity:.72}
 .changelog-nav-btn{position:relative}
 .audio-control{display:flex;align-items:center;gap:6px;position:relative}
 .sfx-mute-btn,.audio-panel-btn{width:32px;height:32px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);font-size:.95rem;display:flex;align-items:center;justify-content:center}
 .audio-panel-btn{font-size:.8rem}
 .sfx-volume{width:96px;accent-color:var(--accent)}
-.audio-panel{display:none;position:absolute;top:40px;right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:12px 14px;min-width:190px;box-shadow:0 8px 24px rgba(0,0,0,.35);z-index:50}
+.audio-panel{display:none;position:absolute;bottom:40px;left:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:12px 14px;min-width:190px;box-shadow:0 8px 24px rgba(0,0,0,.35);z-index:50}
 .audio-panel.open{display:block}
 .audio-panel-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
 .audio-panel-row:last-child{margin-bottom:0}
@@ -123,11 +141,15 @@ nav{position:sticky;top:0;z-index:100;background:var(--bg);border-bottom:1px sol
 .changelog-items li{font-size:.8rem;color:var(--muted);line-height:1.5;padding-left:14px;position:relative}
 .changelog-items li:before{content:"—";position:absolute;left:0;color:var(--accent)}
 
-/* HERO */
-.hero{padding:80px 0 64px;text-align:center}
-.eyebrow{display:inline-block;font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:18px}
-.hero h1{font-size:clamp(2.8rem,7vw,5.2rem);font-weight:900;line-height:1.0;letter-spacing:-.04em;text-wrap:balance;margin-bottom:20px}
-.hero-sub{font-size:1.05rem;color:var(--muted);max-width:500px;margin:0 auto 44px}
+/* PÁGINA — cabeçalho compacto, não mais um hero gigante centralizado.
+   Só aparece na aba Gerador (alternado via switchTab()) — é texto de
+   apresentação específico dela, não faz sentido repetir em toda aba. */
+.main-content{margin-left:264px;padding:32px 40px 60px;min-height:100vh}
+.page-head{max-width:640px}
+.hero{padding:8px 0 32px;text-align:left}
+.eyebrow{display:inline-block;font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:10px}
+.hero h1{font-size:clamp(1.6rem,3vw,2.1rem);font-weight:800;line-height:1.15;letter-spacing:-.02em;text-wrap:balance;margin-bottom:10px}
+.hero-sub{font-size:.92rem;color:var(--muted);max-width:560px;margin:0 0 8px}
 
 /* TABS */
 .tab-bar{display:inline-flex;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-lg);padding:4px;margin-bottom:28px}
@@ -207,7 +229,7 @@ nav{position:sticky;top:0;z-index:100;background:var(--bg);border-bottom:1px sol
 @media(prefers-reduced-motion:reduce){.gen-card.swapping{animation:none}}
 
 /* CAREER MODE */
-.career-wrap{max-width:640px;margin:0 auto;text-align:left}
+.career-wrap{max-width:900px;margin:0;text-align:left}
 
 /* Setup — club grid */
 .club-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
@@ -379,7 +401,7 @@ nav{position:sticky;top:0;z-index:100;background:var(--bg);border-bottom:1px sol
 .tc-pot{font-size:1.1rem;font-weight:900;color:var(--green);font-variant-numeric:tabular-nums}
 .tc-price{font-size:.78rem;font-weight:700;color:var(--text);margin-bottom:12px}
 .tc-price.free{color:var(--green)}
-.tc-btn{width:100%;padding:8px;border-radius:var(--r-sm);font-size:.78rem;font-weight:700;background:var(--accent);color:#fff;transition:background .15s}
+.tc-btn{width:100%;padding:8px;border-radius:var(--r-sm);font-size:.78rem;font-weight:700;background:var(--accent);color:var(--bg);transition:background .15s}
 .tc-btn:hover:not(:disabled){background:var(--accent-dim)}
 .tc-btn:disabled{opacity:.38;cursor:not-allowed}
 .tc-btn.hired-label{background:var(--green)}
@@ -640,7 +662,7 @@ nav{position:sticky;top:0;z-index:100;background:var(--bg);border-bottom:1px sol
 .stat-l{font-size:.78rem;color:var(--muted);font-weight:500;margin-top:4px}
 
 /* SECTIONS */
-.section{padding:80px 0}
+.section{padding:44px 0}
 .section-eyebrow{font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:10px}
 .section h2{font-size:clamp(1.8rem,4vw,2.8rem);font-weight:900;letter-spacing:-.035em;line-height:1.1;text-wrap:balance;margin-bottom:10px}
 .section-sub{font-size:.95rem;color:var(--muted);max-width:440px;margin-bottom:44px}
@@ -656,7 +678,7 @@ nav{position:sticky;top:0;z-index:100;background:var(--bg);border-bottom:1px sol
 .cta-section{padding:96px 0;text-align:center}
 .cta-section h2{font-size:clamp(2rem,5vw,3.4rem);font-weight:900;letter-spacing:-.04em;text-wrap:balance;margin-bottom:16px}
 .cta-section p{font-size:1rem;color:var(--muted);margin-bottom:36px}
-.cta-link{display:inline-block;background:var(--accent);color:#fff;padding:14px 32px;border-radius:var(--r);font-size:.95rem;font-weight:700;transition:background .15s}
+.cta-link{display:inline-block;background:var(--accent);color:var(--bg);padding:14px 32px;border-radius:var(--r);font-size:.95rem;font-weight:700;transition:background .15s}
 .cta-link:hover{background:var(--accent-dim)}
 
 footer{border-top:1px solid var(--border);padding:28px 0}
@@ -671,9 +693,15 @@ footer{border-top:1px solid var(--border);padding:28px 0}
 .credits-claude{font-size:.7rem;color:var(--muted);margin-top:2px}
 .credits-devs{font-size:.68rem;color:var(--muted);margin-top:6px;opacity:.8}
 
-@media(max-width:640px){
-  .nav-links{display:none}
-  .hero{padding:56px 0 48px}
+@media(max-width:900px){
+  .sidebar{position:static;width:auto;height:auto;border-right:none;border-bottom:1px solid var(--border);flex-direction:row;flex-wrap:wrap;align-items:center;padding:12px 16px}
+  .sidebar-logo{padding:6px 10px 6px 0}
+  .sidebar-nav{flex-direction:row;flex-wrap:wrap;gap:6px}
+  .sidebar-nav .tab-btn{width:auto}
+  .sidebar-bottom{margin-top:0;padding-top:0;border-top:none;flex-direction:row;align-items:center;margin-left:auto}
+  .sidebar-credits,.sidebar-link-external{display:none}
+  .main-content{margin-left:0}
+  .hero{padding:20px 0 24px}
   .tab-btn{padding:8px 14px;font-size:.8rem}
   .transfer-grid{grid-template-columns:1fr}
   .stats-row{gap:28px}
@@ -683,23 +711,24 @@ footer{border-top:1px solid var(--border);padding:28px 0}
 </head>
 <body>
 
-<nav>
-  <div class="container">
-    <div class="nav-inner">
-      <div class="logo">CARREIRA<em>DRAFT</em></div>
-      <ul class="nav-links">
-        <li><a onclick="switchTab('gen')">Gerador</a></li>
-        <li><a onclick="switchTab('career')">Modo Carreira</a></li>
-        <li><a onclick="switchTab('worldcup')">Copa do Mundo</a></li>
-        <li><a onclick="switchTab('achievements')">Conquistas</a></li>
-        <li><a href="https://discord.gg/bc4Gmm9cGX" target="_blank" rel="noopener">Comunidade</a></li>
-      </ul>
-      <div class="audio-control">
-        <button class="sfx-mute-btn" id="sfx-mute-btn" onclick="sfxToggleMute()" aria-label="Silenciar tudo (música e efeitos)" title="Silenciar tudo">🔊</button>
-        <button class="audio-panel-btn" id="audio-panel-btn" onclick="toggleAudioPanel()" aria-label="Ajustar volume de música e efeitos" title="Ajustar volume">⚙️</button>
-        <div class="audio-panel" id="audio-panel">
-          <div class="audio-panel-row">
-            <span class="audio-panel-label">🎵 Música</span>
+<nav class="sidebar">
+  <div class="sidebar-logo">CARREIRA<em>DRAFT</em></div>
+  <div class="sidebar-nav">
+    <button class="tab-btn active" data-tab="gen" onclick="switchTab('gen')">🎲 Gerador</button>
+    <button class="tab-btn" data-tab="career" onclick="switchTab('career')">🏆 Modo Carreira</button>
+    <button class="tab-btn" data-tab="playercareer" onclick="switchTab('playercareer')">👟 Carreira de Jogador</button>
+    <button class="tab-btn" data-tab="worldcup" onclick="switchTab('worldcup')">🌍 Copa do Mundo</button>
+    <button class="tab-btn" data-tab="achievements" onclick="switchTab('achievements')">🏅 Conquistas</button>
+    <button class="tab-btn" data-tab="leaderboard" onclick="switchTab('leaderboard')">🌐 Top 30</button>
+  </div>
+  <div class="sidebar-saves" id="sidebar-saves"></div>
+  <div class="sidebar-bottom">
+    <div class="audio-control">
+      <button class="sfx-mute-btn" id="sfx-mute-btn" onclick="sfxToggleMute()" aria-label="Silenciar tudo (música e efeitos)" title="Silenciar tudo">🔊</button>
+      <button class="audio-panel-btn" id="audio-panel-btn" onclick="toggleAudioPanel()" aria-label="Ajustar volume de música e efeitos" title="Ajustar volume">⚙️</button>
+      <div class="audio-panel" id="audio-panel">
+        <div class="audio-panel-row">
+          <span class="audio-panel-label">🎵 Música</span>
             <input class="sfx-volume" id="music-volume-slider" type="range" min="0" max="1" step="0.05" value="0.35" oninput="musicSetVolume(this.value)" aria-label="Volume da música">
           </div>
           <div class="audio-panel-row">
@@ -709,6 +738,13 @@ footer{border-top:1px solid var(--border);padding:28px 0}
         </div>
       </div>
       <button class="nav-btn changelog-nav-btn" onclick="openChangelog()">🆕 Novidades<span class="changelog-dot" id="changelog-dot" style="display:none"></span></button>
+    </div>
+    <a class="sidebar-link-external" href="https://discord.gg/bc4Gmm9cGX" target="_blank" rel="noopener">Comunidade</a>
+    <div class="sidebar-credits">
+      <div class="credits-name-row"><span class="credits-star">✦</span><span class="credits-name">Lohan A. · Criador</span></div>
+      <div class="credits-claude">desenvolvido com Claude e Gemini</div>
+      <div class="credits-devs">Miguel Alencar · julinbxtr · binho78</div>
+      <div class="credits-devs">© 2025 CarreiraDraft · Não afiliado à EA Sports</div>
     </div>
   </div>
 </nav>
@@ -731,21 +767,13 @@ footer{border-top:1px solid var(--border);padding:28px 0}
   </div>
 </div>
 
-<main>
-<section class="hero" id="hero">
-  <div class="container">
+<main class="main-content">
+<section class="hero">
+  <div class="page-head" id="page-head">
     <span class="eyebrow">Modo Carreira · EA FC</span>
-    <h1>Seu próximo desafio<br>te espera.</h1>
+    <h1>Seu próximo desafio te espera.</h1>
     <p class="hero-sub">Gere desafios únicos ou simule uma carreira completa temporada por temporada, com tabela real e narrativa.</p>
-
-    <div class="tab-bar">
-      <button class="tab-btn active" data-tab="gen" onclick="switchTab('gen')">🎲 Gerador</button>
-      <button class="tab-btn" data-tab="career" onclick="switchTab('career')">🏆 Modo Carreira</button>
-      <button class="tab-btn" data-tab="playercareer" onclick="switchTab('playercareer')">👟 Carreira de Jogador</button>
-      <button class="tab-btn" data-tab="worldcup" onclick="switchTab('worldcup')">🌍 Copa do Mundo</button>
-      <button class="tab-btn" data-tab="achievements" onclick="switchTab('achievements')">🏅 Conquistas</button>
-      <button class="tab-btn" data-tab="leaderboard" onclick="switchTab('leaderboard')">🌐 Top 30</button>
-    </div>
+  </div>
 
     <!-- GENERATOR TAB -->
     <div class="tab-pane active" id="tab-gen">
@@ -820,23 +848,8 @@ footer{border-top:1px solid var(--border);padding:28px 0}
     <div class="tab-pane" id="tab-leaderboard">
       <div class="career-wrap" id="leaderboard-root"></div>
     </div>
-  </div>
 </section>
 </main>
-
-<footer>
-  <div class="container">
-    <div class="footer-inner">
-      <div class="footer-logo">CARREIRA<em>DRAFT</em></div>
-      <div class="footer-copy">© 2025 CarreiraDraft · Não afiliado à EA Sports</div>
-      <div class="footer-credits">
-        <div class="credits-name-row"><span class="credits-star">✦</span><span class="credits-name">Lohan A. · Criador</span></div>
-        <div class="credits-claude">desenvolvido com Claude e Gemini</div>
-        <div class="credits-devs">Desenvolvedores: Miguel Alencar · julinbxtr · binho78</div>
-      </div>
-    </div>
-  </div>
-</footer>
 
 <script>
 // ── UTILS ──────────────────────────────────────────
@@ -1275,6 +1288,12 @@ function renderAchievementsScreen(){
 // Cada atualização real do site vira uma entrada aqui. A versão mais nova
 // (topo do array) é a que decide se o painel abre sozinho pra quem já visitou.
 const CHANGELOG=[
+  {version:'1.42',title:'Visual novo: barra lateral e paleta de cinza',items:[
+    'Redesenho completo do layout: menu virou uma barra lateral fixa (igual a de plataformas de produtividade que você já usa), liberando bem mais espaço na tela pra tudo — clubes, tabelas, elenco.',
+    'Nova seção "Seus saves" na barra lateral, mostrando sua carreira e sua Carreira de Jogador em andamento com um clique pra voltar direto.',
+    'Paleta de cor trocada pra tons de cinza como base (era verde escuro com dourado) — visual mais limpo e menos "propaganda", mais parecido com uma ferramenta de verdade.',
+    'Tipografia trocada pra uma fonte mais legível e menos gritada, com textos de abertura bem menores e alinhados à esquerda em vez de centralizados.',
+  ]},
   {version:'1.41',title:'Top 30 da Copa do Mundo + nota da campanha',items:[
     'Novo: a Copa do Mundo agora também tem nota de campanha (D até PATRIMÔNIO NACIONAL) — leva em conta até onde você chegou, prêmios do torneio e se sua seleção era zebra.',
     'Novo: Top 30 da Copa do Mundo, ranqueado por nota, prêmios e gols do artilheiro do seu torneio — mesmo sistema de login e envio do Modo Carreira.',
@@ -1536,12 +1555,17 @@ function closeChangelog(){
 function switchTab(t){
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.toggle('active',p.id==='tab-'+t));
+  // Texto de apresentação (page-head) é conteúdo do Gerador especificamente
+  // — não faz sentido repetir em toda aba, então só aparece nela.
+  const pageHead=document.getElementById('page-head');
+  if(pageHead)pageHead.style.display=t==='gen'?'':'none';
   if(t==='career'&&!career.club&&career.phase==='setup')renderCareer();
   if(t==='playercareer')renderPlayerCareer();
   if(t==='worldcup')renderWC();
   if(t==='achievements')renderAchievementsScreen();
   if(t==='leaderboard')renderLeaderboardScreen();
   musicSyncToScreen(); // Gerador/Jogadores/Comunidade não passam por renderCareer/renderWC — sincroniza aqui também
+  renderSidebarSaves();
 }
 
 // ── TEAMS DATABASE (fonte única — Gerador + Modo Carreira) ─
@@ -7409,6 +7433,31 @@ function loadSavedCareer(){
     return data;
   }catch(e){return null;}
 }
+// Painel "seus saves" na barra lateral — pedido explícito (referência
+// dada: a barra lateral da própria Claude, com o histórico). Mostra só os
+// 2 modos que hoje têm save persistente (1 slot cada, sobrescrito a cada
+// partida nova) — a Copa do Mundo não persiste entre sessões, não tem o
+// que mostrar aqui. Chamado a cada switchTab() — barato, mantém sempre
+// atualizado sem precisar caçar todo ponto que poderia ter mudado um save.
+function renderSidebarSaves(){
+  const root=document.getElementById('sidebar-saves');
+  if(!root)return;
+  const items=[];
+  const careerSave=loadSavedCareer();
+  if(careerSave&&careerSave.club){
+    items.push(`<button class="sidebar-save-item" onclick="switchTab('career')"><strong>${careerSave.club.n}</strong>Modo Carreira · Temporada ${careerSave.season}</button>`);
+  }
+  try{
+    const raw=localStorage.getItem(PC_SAVE_KEY);
+    if(raw){
+      const pcData=JSON.parse(raw);
+      if(pcData&&pcData.self&&pcData.phase&&pcData.phase!=='setup'){
+        items.push(`<button class="sidebar-save-item" onclick="switchTab('playercareer')"><strong>${pcData.self.name}</strong>Carreira de Jogador · Temporada ${pcData.season}</button>`);
+      }
+    }
+  }catch(e){}
+  root.innerHTML=items.length?`<div class="sidebar-saves-title">Seus saves</div>${items.join('')}`:'';
+}
 function continueCareer(){
   const data=loadSavedCareer();
   if(!data)return;
@@ -9702,6 +9751,7 @@ function renderLeaderboardScreen(){
 
 // Init career tab when first opened
 renderCareer();
+renderSidebarSaves();
 </script>
 
 <!-- Top 30 — login e Firestore. SDK do Firebase é ESM, por isso vive num
