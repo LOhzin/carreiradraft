@@ -1275,6 +1275,11 @@ function renderAchievementsScreen(){
 // Cada atualização real do site vira uma entrada aqui. A versão mais nova
 // (topo do array) é a que decide se o painel abre sozinho pra quem já visitou.
 const CHANGELOG=[
+  {version:'1.41',title:'Top 30 da Copa do Mundo + nota da campanha',items:[
+    'Novo: a Copa do Mundo agora também tem nota de campanha (D até PATRIMÔNIO NACIONAL) — leva em conta até onde você chegou, prêmios do torneio e se sua seleção era zebra.',
+    'Novo: Top 30 da Copa do Mundo, ranqueado por nota, prêmios e gols do artilheiro do seu torneio — mesmo sistema de login e envio do Modo Carreira.',
+    'A aba Top 30 agora tem um seletor pra trocar entre o ranking do Modo Carreira e o da Copa — o mesmo login serve os dois.',
+  ]},
   {version:'1.40',title:'Apelido no Top 30',items:[
     'Novo: escolha um apelido pra aparecer no ranking, em vez de usar sempre o nome da sua conta Google.',
   ]},
@@ -4018,6 +4023,17 @@ function renderWCTournamentEnd(){
   </div>`;
   const bracketHtml=wcBracketHtml();
   const awardsHtml=wcAwardsHtml(awards);
+  const wcGrade=computeWCGrade();
+  const wcLeaderboardLabel=!window.fbUser?'🌐 Entrar com Google e enviar pro Top 30'
+    :wcLeaderboardSubmitStatus==='sending'?'Enviando...'
+    :wcLeaderboardSubmitStatus==='sent'?'✓ Enviado pro Top 30'
+    :wcLeaderboardSubmitStatus==='error'?'Erro ao enviar — tentar de novo'
+    :'🌐 Enviar campanha pro Top 30';
+  const wcLeaderboardDisabled=wcLeaderboardSubmitStatus==='sending'||wcLeaderboardSubmitStatus==='sent';
+  const wcLeaderboardBlock=`<div class="squad-hint" style="margin:16px 0;display:flex;justify-content:space-between;align-items:center">
+      <span>Nota da campanha</span><strong style="font-size:1.1rem">${wcGrade}</strong>
+    </div>
+    <button class="btn-secondary" style="width:100%;margin-bottom:16px" ${wcLeaderboardDisabled?'disabled':''} onclick="submitWCToLeaderboard()">${wcLeaderboardLabel}</button>`;
 
   if(isChampion){
     if(!wc.championshipFed){ wc.championshipFed=true; wcFeedChampionshipIntoCareerTimeline(); }
@@ -4036,6 +4052,7 @@ function renderWCTournamentEnd(){
     <div class="share-card-footer" style="margin-top:12px">CarreiraDraft · Campeão Mundial</div>
   </div>
   ${awardsHtml}
+  ${wcLeaderboardBlock}
   ${bracketHtml}
   <div class="confirm-bar"><button class="btn-primary" onclick="wcStartNewTournament()">Nova Copa →</button></div>`;
   }
@@ -4075,6 +4092,7 @@ function renderWCTournamentEnd(){
     <div class="share-card-footer" style="margin-top:12px">CarreiraDraft · Copa do Mundo</div>
   </div>
   ${awardsHtml}
+  ${wcLeaderboardBlock}
   ${bracketHtml}
   <div class="confirm-bar"><button class="btn-primary" onclick="wcStartNewTournament()">Nova Copa →</button></div>`;
 }
@@ -9449,6 +9467,7 @@ function escapeHtml(str){
 
 function onFbAuthChanged(){
   leaderboardRows=null; // login mudou — recarrega (pra destacar "minha linha" certo)
+  wcLeaderboardRows=null;
   renderLeaderboardScreen();
 }
 
@@ -9499,6 +9518,79 @@ function retryLeaderboardLoad(){
   leaderboardError=null;
   renderLeaderboardScreen();
 }
+
+// ── TOP 30 DA COPA DO MUNDO — "mesmo sistema do Modo Carreira", pedido
+// explícito. Mesma escada de nota (D→PATRIMÔNIO NACIONAL), mesmos pesos
+// de pontuação (computeLeaderboardScore reaproveitado sem duplicar) —
+// só os critérios de origem mudam: fase alcançada no torneio no lugar de
+// posição na tabela, prêmios do torneio no lugar de títulos, artilheiro
+// do MEU torneio no lugar do artilheiro da temporada.
+let wcLeaderboardRows=null;
+let wcLeaderboardLoading=false;
+let wcLeaderboardError=null;
+let wcLeaderboardSubmitStatus=null;
+
+const WC_STAGE_BASE={groups:0,r32:1,r16:2,qf:3,sf:4,third:4,final:5};
+function wcMyAwardsCount(){
+  const awards=wc.__tournamentAwards||wcComputeTournamentAwards();
+  let n=0;
+  if(awards.bolaDeOuro&&awards.bolaDeOuro.isMine)n++;
+  if(awards.chuteiraDeOuro&&awards.chuteiraDeOuro.isMine)n++;
+  if(awards.luvaDeOuro&&awards.luvaDeOuro.isMine)n++;
+  if(awards.melhorJovem&&awards.melhorJovem.isMine)n++;
+  return n;
+}
+// Fase alcançada é a base do score (grupos=0 até campeão=6); terceiro
+// lugar de verdade (venceu a disputa de bronze) vale um pouco mais que
+// ficar em 4º; prêmios do torneio somam; e zebra (seleção força 3+
+// indo longe) dá bônus — mesmo espírito da conquista "Zebra Mundial".
+function computeWCGrade(){
+  if(!wc.knockout)return'D';
+  const ctx=wcEliminationContext();
+  const isChampion=wc.knockout.champion===wc.myNation;
+  let score=isChampion?6:(WC_STAGE_BASE[ctx.stage]!==undefined?WC_STAGE_BASE[ctx.stage]:0);
+  if(ctx.stage==='third'&&ctx.won)score+=0.5;
+  score+=wcMyAwardsCount()*0.5;
+  const info=wcNationInfo(wc.myNation);
+  const forcaSelecao=info?info.forcaSelecao:1;
+  if(forcaSelecao>=3&&score>=4)score+=1;
+  if(forcaSelecao>=3&&isChampion)score+=1;
+  const grades=['D','C','C+','B','B+','A','A+','S','S+','PATRIMÔNIO NACIONAL'];
+  return grades[clamp(Math.round(score),0,grades.length-1)];
+}
+function wcTopScorerGoals(){
+  const vals=Object.values(wc.tournamentStats||{}).map(function(s){return s.goals||0;});
+  return vals.length?Math.max.apply(null,vals):0;
+}
+function buildWCLeaderboardPayload(){
+  const grade=computeWCGrade();
+  const gradeIndex=gradeToIndex(grade);
+  const awardsCount=wcMyAwardsCount();
+  const goals=wcTopScorerGoals();
+  const score=computeLeaderboardScore(gradeIndex,awardsCount,goals);
+  const username=(leaderboardNickname&&leaderboardNickname.trim())||(window.fbUser&&window.fbUser.name)||'Jogador sem nome';
+  return{username,nation:wc.myNation,grade,gradeIndex,awards:awardsCount,goals,score};
+}
+function submitWCToLeaderboard(){
+  if(typeof window.fbSignIn!=='function'){wcLeaderboardSubmitStatus='error';renderWC();return;}
+  if(!window.fbUser){window.fbSignIn();return;}
+  wcLeaderboardSubmitStatus='sending';
+  renderWC();
+  const payload=buildWCLeaderboardPayload();
+  window.fbSubmitWC(payload).then(function(res){
+    wcLeaderboardSubmitStatus=res&&res.ok?'sent':'error';
+    renderWC();
+  });
+}
+function retryWCLeaderboardLoad(){
+  wcLeaderboardError=null;
+  renderLeaderboardScreen();
+}
+let leaderboardMode='career'; // 'career' | 'wc'
+function setLeaderboardMode(mode){
+  leaderboardMode=mode;
+  renderLeaderboardScreen();
+}
 function renderLeaderboardScreen(){
   const root=document.getElementById('leaderboard-root');
   if(!root)return;
@@ -9518,42 +9610,74 @@ function renderLeaderboardScreen(){
         <button class="btn-primary" onclick="fbSignIn()">Entrar com Google</button>
         ${window.fbSignInError?`<div style="color:var(--danger);font-size:.8rem;margin-top:8px">${window.fbSignInError}</div>`:''}
       </div>`;
-  // Só dispara o carregamento automático UMA vez (rows null E error null) —
-  // achado ao vivo: sem checar leaderboardError aqui, uma falha (ex.:
-  // regras do Firestore ainda não publicadas) reentrava nessa condição em
-  // TODO render seguinte (rows continuava null pra sempre depois de uma
-  // falha), disparando fbLoadLeaderboard() de novo a cada render — dezenas
-  // de chamadas repetidas. Falha agora exige clique manual em "Tentar de
-  // novo" pra reintentar, não fica martelando sozinho.
-  if(fbReady&&leaderboardRows===null&&!leaderboardLoading&&!leaderboardError){
-    leaderboardLoading=true;
-    window.fbLoadLeaderboard().then(function(res){
-      leaderboardLoading=false;
-      if(res&&res.ok){leaderboardRows=res.rows;} else {leaderboardError=(res&&res.error)||'erro desconhecido';}
-      renderLeaderboardScreen();
-    });
-  }
-  let listHtml;
-  if(!fbReady){
-    listHtml='';
-  } else if(leaderboardLoading){
-    listHtml='<div class="squad-hint">Carregando ranking...</div>';
-  } else if(leaderboardError){
-    listHtml='<div class="squad-hint">Não consegui carregar o ranking agora. <button class="btn-secondary" style="margin-top:8px" onclick="retryLeaderboardLoad()">Tentar de novo</button></div>';
-  } else if(!leaderboardRows||!leaderboardRows.length){
-    listHtml='<div class="squad-hint">Ninguém no Top 30 ainda — termine uma carreira no Modo Carreira e seja o primeiro!</div>';
+
+  // Um login só serve os dois rankings — a escolha aqui é só qual LISTA
+  // mostrar, não uma sessão separada. Pedido explícito: "mesmo sistema do
+  // modo carreira" pro modo Copa também, então os dois vivem na mesma aba.
+  const modeTabsHtml=`<div class="cf-row" style="margin-bottom:16px">
+    <div class="f-pill ${leaderboardMode==='career'?'active':''}" onclick="setLeaderboardMode('career')">🏆 Modo Carreira</div>
+    <div class="f-pill ${leaderboardMode==='wc'?'active':''}" onclick="setLeaderboardMode('wc')">🌍 Copa do Mundo</div>
+  </div>`;
+
+  let listHtml,description;
+  if(leaderboardMode==='career'){
+    description='Ranking por nota da carreira, títulos e gols do artilheiro somados.';
+    // Mesmo guard contra loop de retry documentado abaixo, aplicado aqui.
+    if(fbReady&&leaderboardRows===null&&!leaderboardLoading&&!leaderboardError){
+      leaderboardLoading=true;
+      window.fbLoadLeaderboard().then(function(res){
+        leaderboardLoading=false;
+        if(res&&res.ok){leaderboardRows=res.rows;} else {leaderboardError=(res&&res.error)||'erro desconhecido';}
+        renderLeaderboardScreen();
+      });
+    }
+    if(!fbReady){listHtml='';}
+    else if(leaderboardLoading){listHtml='<div class="squad-hint">Carregando ranking...</div>';}
+    else if(leaderboardError){listHtml='<div class="squad-hint">Não consegui carregar o ranking agora. <button class="btn-secondary" style="margin-top:8px" onclick="retryLeaderboardLoad()">Tentar de novo</button></div>';}
+    else if(!leaderboardRows||!leaderboardRows.length){listHtml='<div class="squad-hint">Ninguém no Top 30 ainda — termine uma carreira no Modo Carreira e seja o primeiro!</div>';}
+    else{
+      listHtml=leaderboardRows.map(function(r,i){
+        const mine=window.fbUser&&r.uid===window.fbUser.uid;
+        return`<div class="history-item" style="${mine?'border-color:var(--accent);border-width:2px':''}">
+          <span class="hi-season">#${i+1}</span>
+          <span class="hi-record">${escapeHtml(r.username)} · ${escapeHtml(r.clubName)} · ${escapeHtml(r.grade)} · ${Number(r.titles)||0} título(s) · ${Number(r.goals)||0} gols</span>
+        </div>`;
+      }).join('');
+    }
   } else {
-    listHtml=leaderboardRows.map(function(r,i){
-      const mine=window.fbUser&&r.uid===window.fbUser.uid;
-      return`<div class="history-item" style="${mine?'border-color:var(--accent);border-width:2px':''}">
-        <span class="hi-season">#${i+1}</span>
-        <span class="hi-record">${escapeHtml(r.username)} · ${escapeHtml(r.clubName)} · ${escapeHtml(r.grade)} · ${Number(r.titles)||0} título(s) · ${Number(r.goals)||0} gols</span>
-      </div>`;
-    }).join('');
+    description='Ranking por nota da campanha, prêmios individuais do torneio e gols do artilheiro somados.';
+    // Falha (ex.: regras do Firestore ainda não publicadas pra essa
+    // coleção nova) NÃO dispara fbLoadWCLeaderboard() de novo sozinha a
+    // cada render — mesma correção já aplicada no ranking do Modo
+    // Carreira (achado ao vivo lá: sem o guard, gerava dezenas de
+    // chamadas repetidas). Exige clique manual em "Tentar de novo".
+    if(fbReady&&wcLeaderboardRows===null&&!wcLeaderboardLoading&&!wcLeaderboardError){
+      wcLeaderboardLoading=true;
+      window.fbLoadWCLeaderboard().then(function(res){
+        wcLeaderboardLoading=false;
+        if(res&&res.ok){wcLeaderboardRows=res.rows;} else {wcLeaderboardError=(res&&res.error)||'erro desconhecido';}
+        renderLeaderboardScreen();
+      });
+    }
+    if(!fbReady){listHtml='';}
+    else if(wcLeaderboardLoading){listHtml='<div class="squad-hint">Carregando ranking...</div>';}
+    else if(wcLeaderboardError){listHtml='<div class="squad-hint">Não consegui carregar o ranking agora. <button class="btn-secondary" style="margin-top:8px" onclick="retryWCLeaderboardLoad()">Tentar de novo</button></div>';}
+    else if(!wcLeaderboardRows||!wcLeaderboardRows.length){listHtml='<div class="squad-hint">Ninguém no Top 30 da Copa ainda — termine um torneio e seja o primeiro!</div>';}
+    else{
+      listHtml=wcLeaderboardRows.map(function(r,i){
+        const mine=window.fbUser&&r.uid===window.fbUser.uid;
+        return`<div class="history-item" style="${mine?'border-color:var(--accent);border-width:2px':''}">
+          <span class="hi-season">#${i+1}</span>
+          <span class="hi-record">${escapeHtml(r.username)} · ${escapeHtml(r.nation)} · ${escapeHtml(r.grade)} · ${Number(r.awards)||0} prêmio(s) · ${Number(r.goals)||0} gols</span>
+        </div>`;
+      }).join('');
+    }
   }
+
   root.innerHTML=`<div>
-    <div class="section-title" style="margin-bottom:8px">Top 30 — Modo Carreira</div>
-    <p style="font-size:.8rem;color:var(--muted);margin-bottom:16px">Ranking por nota da carreira, títulos e gols do artilheiro somados. Só carreiras enviadas por quem faz login entram aqui — Modo Carreira (técnico) por enquanto.</p>
+    <div class="section-title" style="margin-bottom:8px">Top 30</div>
+    ${modeTabsHtml}
+    <p style="font-size:.8rem;color:var(--muted);margin-bottom:16px">${description} Só quem faz login e envia entra aqui.</p>
     ${userBlock}
     <div class="history-list">${listHtml}</div>
   </div>`;
@@ -9655,6 +9779,48 @@ window.fbLoadLeaderboard = async function(){
     return { ok:true, rows };
   }catch(e){
     console.error('Falha ao carregar o Top 30', e);
+    return { ok:false, error:String(e), rows:[] };
+  }
+};
+
+// Top 30 da Copa do Mundo — coleção Firestore separada (wcLeaderboard),
+// mesmo padrão exato do Modo Carreira acima (guarda a MELHOR campanha,
+// só sobrescreve se a pontuação nova for maior).
+window.fbSubmitWC = async function(payload){
+  if(!fbAuth.currentUser) return { ok:false, error:'not-signed-in' };
+  const uid = fbAuth.currentUser.uid;
+  try{
+    const ref = doc(fbDb,'wcLeaderboard',uid);
+    const existingSnap = await getDoc(ref);
+    if(existingSnap.exists() && existingSnap.data().score >= payload.score){
+      return { ok:true, improved:false };
+    }
+    await setDoc(ref, {
+      uid,
+      username: payload.username || fbAuth.currentUser.displayName || 'Jogador sem nome',
+      nation: payload.nation,
+      grade: payload.grade,
+      gradeIndex: payload.gradeIndex,
+      awards: payload.awards,
+      goals: payload.goals,
+      score: payload.score,
+      updatedAt: serverTimestamp(),
+    });
+    return { ok:true, improved:true };
+  }catch(e){
+    console.error('Falha ao enviar campanha pro Top 30 da Copa', e);
+    return { ok:false, error:String(e) };
+  }
+};
+window.fbLoadWCLeaderboard = async function(){
+  try{
+    const q = query(collection(fbDb,'wcLeaderboard'), orderBy('score','desc'), limit(30));
+    const snap = await getDocs(q);
+    const rows = [];
+    snap.forEach(function(d){ rows.push(d.data()); });
+    return { ok:true, rows };
+  }catch(e){
+    console.error('Falha ao carregar o Top 30 da Copa', e);
     return { ok:false, error:String(e), rows:[] };
   }
 };
